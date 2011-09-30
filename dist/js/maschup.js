@@ -723,7 +723,13 @@ var do_request = function(request_data) {
     }
     
     if (request_data.type == 'GET' && request_data.data) {
-        var has_question = request_data.url.indexOf('?') >= 0 ? '&' : '?';
+        var index_of_quest = request_data.url.indexOf('?');
+
+        if (index_of_quest == (request_data.url.length - 1)) {
+            request_data.url = request_data.url.slice(0,-1);
+            index_of_quest = -1;
+        }
+        var has_question =  (index_of_quest >= 0) ? '&' : '?';
         request_data.url = request_data.url.replace(/\?$/,'') + has_question + make_params(request_data.data);
     }
     request.open(request_data.type,request_data.url,request_data.async);
@@ -1095,6 +1101,7 @@ base.retrieve = function(agi,callback)
                 db.exec('DROP TABLE datacache;');
                 db.exec('ALTER TABLE datacache_tmp RENAME TO datacache;');
                 db.exec('CREATE INDEX accessions on datacache(acc);');
+                db.exec('CREATE INDEX accessions_service on datacache(acc,service);');
                 db.exec('DELETE FROM versions where tablename = "datacache"');
                 db.exec('INSERT INTO versions(version,tablename) VALUES(1.2,"datacache");',function(err,rows) {
                     if ( ! err ) {
@@ -1626,7 +1633,7 @@ MASCP.ArbitraryDataReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.ArbitraryDataReader.SERVICE_URL = 'http://gator.masc-proteomics.org/datasets.pl';
+MASCP.ArbitraryDataReader.SERVICE_URL = 'http://gator.masc-proteomics.org/datasets.pl?';
 
 MASCP.ArbitraryDataReader.prototype.requestData = function()
 {
@@ -1909,7 +1916,7 @@ MASCP.AtPeptideReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.AtPeptideReader.SERVICE_URL = 'http://gator.masc-proteomics.org/atpeptide.pl';
+MASCP.AtPeptideReader.SERVICE_URL = 'http://gator.masc-proteomics.org/atpeptide.pl?';
 
 MASCP.AtPeptideReader.prototype.requestData = function()
 {
@@ -2099,7 +2106,7 @@ MASCP.AtProteomeReader.prototype.requestData = function()
 };
 
 
-MASCP.AtProteomeReader.SERVICE_URL = 'http://fgcz-pep2pro.uzh.ch/mascp_gator.php';
+MASCP.AtProteomeReader.SERVICE_URL = 'http://fgcz-pep2pro.uzh.ch/mascp_gator.php?';
 
 /**
  * @class   Container class for results from the AtProteome service
@@ -2397,7 +2404,7 @@ MASCP.GelMapReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.GelMapReader.SERVICE_URL = ' http://gelmap.de/gator2.php';
+MASCP.GelMapReader.SERVICE_URL = ' http://gelmap.de/gator2.php?';
 
 MASCP.GelMapReader.prototype.requestData = function()
 {
@@ -2516,7 +2523,7 @@ MASCP.InterproReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.InterproReader.SERVICE_URL = 'http://gator.masc-proteomics.org/interpro.pl';
+MASCP.InterproReader.SERVICE_URL = 'http://gator.masc-proteomics.org/interpro.pl?';
 
 MASCP.InterproReader.prototype.requestData = function()
 {    
@@ -2654,16 +2661,16 @@ MASCP.P3dbReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.P3dbReader.SERVICE_URL = 'http://p3db.org/gator.php';
+MASCP.P3dbReader.SERVICE_URL = 'http://p3db.org/gator.php?';
 
 MASCP.P3dbReader.prototype.requestData = function()
 {
-    var agi = this.agi;
+    var agi = this.agi.toLowerCase();
     
     return {
         type: "GET",
         dataType: "json",
-        data: { 'agi'       : agi.toLowerCase(),
+        data: { 'agi'       : agi,
                 'service'   : 'p3db' 
         }
     };
@@ -2847,7 +2854,7 @@ MASCP.PhosphatReader =  MASCP.buildService(function(data) {
                             return this;
                         });
 
-MASCP.PhosphatReader.SERVICE_URL = 'http://gator.masc-proteomics.org/proxy.pl';
+MASCP.PhosphatReader.SERVICE_URL = 'http://gator.masc-proteomics.org/proxy.pl?';
 
 MASCP.PhosphatReader.prototype.requestData = function()
 {
@@ -3278,7 +3285,7 @@ MASCP.PromexReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.PromexReader.SERVICE_URL = 'http://131.130.57.242/json/';
+MASCP.PromexReader.SERVICE_URL = 'http://131.130.57.242/json/?';
 
 MASCP.PromexReader.prototype.requestData = function()
 {
@@ -3387,7 +3394,7 @@ MASCP.RippdbReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.RippdbReader.SERVICE_URL = 'http://gator.masc-proteomics.org/rippdb.pl';
+MASCP.RippdbReader.SERVICE_URL = 'http://gator.masc-proteomics.org/rippdb.pl?';
 
 MASCP.RippdbReader.prototype.requestData = function()
 {
@@ -3521,7 +3528,7 @@ MASCP.SnpReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.SnpReader.SERVICE_URL = 'http://gator.masc-proteomics.org/snps.pl';
+MASCP.SnpReader.SERVICE_URL = 'http://gator.masc-proteomics.org/snps.pl?';
 
 MASCP.SnpReader.prototype.requestData = function()
 {
@@ -3685,7 +3692,7 @@ MASCP.SubaReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.SubaReader.SERVICE_URL = 'http://suba.plantenergy.uwa.edu.au/services/byAGI.php';
+MASCP.SubaReader.SERVICE_URL = 'http://suba.plantenergy.uwa.edu.au/services/byAGI.php?';
 
 MASCP.SubaReader.prototype.requestData = function()
 {
@@ -3942,7 +3949,7 @@ MASCP.TairReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.TairReader.SERVICE_URL = 'http://gator.masc-proteomics.org/tair.pl';
+MASCP.TairReader.SERVICE_URL = 'http://gator.masc-proteomics.org/tair.pl?';
 
 MASCP.TairReader.prototype.requestData = function()
 {
