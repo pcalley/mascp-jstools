@@ -438,6 +438,7 @@ if (typeof module != 'undefined' && module.exports){
         return this._dom;
     });
     XMLHttpRequest.prototype.__defineSetter__("responseXML",function() {});
+    XMLHttpRequest.prototype.customUA = 'MASCP Gator crawler (+http://gator.masc-proteomics.org/)';
 } else {
     window.MASCP = MASCP;
     var ie = (function(){
@@ -729,6 +730,10 @@ var do_request = function(request_data) {
     if (request_data.type == 'POST') {
         request.setRequestHeader("Content-Type","application/x-www-form-urlencoded");
         datablock = make_params(request_data.data);
+    }
+
+    if (request.customUA) {
+        request.setRequestHeader('User-Agent',request.customUA);
     }
     
     request.onreadystatechange = function(evt) {
