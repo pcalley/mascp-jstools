@@ -627,7 +627,7 @@ MASCP.Service.prototype.gotResult = function()
 MASCP.Service.prototype.requestComplete = function()
 {
     bean.fire(this,'requestComplete');
-    bean.fire(MASCP.Service,'requestComplete');
+    bean.fire(MASCP.Service,'requestComplete',[this]);
 };
 
 MASCP.Service.registeredLayers = function(service) {
@@ -1778,6 +1778,12 @@ MASCP.ArbitraryDataReader.prototype.retrieve = function(in_agi,cback)
                     jQuery(rrend).trigger('resultsRendered',[self]);
                 }
             });
+        });
+        reader.bind('resultReceived',function() {
+            self.gotResult();
+        })
+        reader.bind('requestComplete',function() {
+            self.requestComplete();
         });
         reader.retrieve(agi,cback);
     });
