@@ -210,7 +210,6 @@
       } else if (!args && element[eventSupport]) {
         fireListener(isNative, type, element);
       } else {
-          
         for (k in handlers) {
           handlers.hasOwnProperty(k) && handlers[k].apply(element, [false].concat(args));
         }
