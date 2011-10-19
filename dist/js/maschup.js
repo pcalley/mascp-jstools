@@ -5709,7 +5709,7 @@ var SVGCanvas = SVGCanvas || (function() {
         
         an_array.animate = function(hsh) {
             if (typeof hsh.y == 'undefined') {
-                an_array.attr(hsh);
+                attr(hsh);
                 return;
             }
             if (an_array.length === 0) {
@@ -5743,7 +5743,7 @@ var SVGCanvas = SVGCanvas || (function() {
 
             var target_disp = hash.visibility;
             if (curr_disp == target_disp && target_disp == 'hidden') {
-                an_array.attr(hsh);
+                attr(hsh);
                 return;
             }
 
@@ -5761,14 +5761,14 @@ var SVGCanvas = SVGCanvas || (function() {
             if (curr_disp == target_disp && target_disp == 'visible' ) {
                 delete hash.visibility;
                 target_disp = null;                    
-                an_array.attr({'visibility' : 'visible'});
+                attr({'visibility' : 'visible'});
             }
 
             if (hash.visibility == 'hidden') {
                 delete hash.visibility;
             }
 
-            an_array.attr(hash);
+            attr(hash);
             var counter = 0;
 
             if (target_y != curr_y) {
@@ -5787,7 +5787,7 @@ var SVGCanvas = SVGCanvas || (function() {
                         if (diff > 0 && (hash.y > target_y) ) {
                             hash.y = target_y;
                         }
-                        an_array.attr(hash);
+                        attr(hash);
                         counter += (step || 1);
                         if (hash.y != target_y) {
                             hash.y = curr_y + diff*(counter+1);
@@ -5795,7 +5795,7 @@ var SVGCanvas = SVGCanvas || (function() {
                         }
                         an_array.animating = false;
                         if (target_disp) {
-                            an_array.attr({'visibility' : target_disp});
+                            attr({'visibility' : target_disp});
                         }
                         anim_clock_funcs.splice(anim_clock_funcs.indexOf(arguments.callee),1);
                     }
@@ -5806,6 +5806,13 @@ var SVGCanvas = SVGCanvas || (function() {
         };
         
         an_array.attr = function(hsh) {
+            if (in_anim) {
+                return this.animate(hsh);
+            }
+            return attr(hsh);
+        };
+        
+        var attr = function(hsh) {
             var hash = {};
             var key;
             for (key in hsh) {
