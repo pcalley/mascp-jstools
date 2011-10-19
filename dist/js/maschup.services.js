@@ -3339,6 +3339,7 @@ MASCP.SnpReader.prototype.setupSequenceRenderer = function(renderer) {
         while (accessions.length > 0) {
 
             var acc = accessions.shift();
+            var acc_fullname = acc;
 
             var diffs = a_result.getSnp(acc);
 
@@ -3352,18 +3353,26 @@ MASCP.SnpReader.prototype.setupSequenceRenderer = function(renderer) {
 
             var in_layer = 'all'+acc;
             var group_layer = acc.indexOf('_') >= 0 ? (acc.split('_')[0]) : null;
-            if (['SALK','MPICAO','GMI'].indexOf(group_layer) < 0) {
+
+            if (['SALK','MPICAO','GMI','MPISCHNEE','MPICOLLAB'].indexOf(group_layer) < 0) {
                 group_layer = null;
+            } else {
+                acc_fullname = acc.replace(/^[^_]+_/,'');
             }
+
             var ins = [];
             var outs = [];
 
             if (group_layer) {
-                MASCP.registerGroup(group_layer);
+                MASCP.registerGroup(group_layer, {'group' : 'insertions'});
                 renderer.registerLayer(group_layer+'_controller', {'fullname' : group_layer, 'group' : 'insertions' , 'color' : '#ff0000'});
+                if (renderer.createGroupController && group_layer) {
+                    renderer.createGroupController(group_layer+'_controller',group_layer);
+                }
+                
             }
 
-            var acc_layer = renderer.registerLayer(in_layer, {'fullname' : acc, 'group' : group_layer || 'insertions' });
+            var acc_layer = renderer.registerLayer(in_layer, {'fullname' : acc_fullname, 'group' : group_layer || 'insertions' });
             
             (function(this_acc) {
                 return function() {
@@ -3423,9 +3432,6 @@ MASCP.SnpReader.prototype.setupSequenceRenderer = function(renderer) {
         
             if (renderer.createGroupController) {
                 renderer.createGroupController('insertions_controller','insertions');
-                if (group_layer) {
-                    renderer.createGroupController(group_layer+'_controller',group_layer);
-                }
             }
         }
         });
@@ -3467,7 +3473,7 @@ MASCP.SnpReader.Result.prototype.getSnpsForPosition = function(position) {
         return this._cached[position];
     }
     var results = [];
-    MASCP.SnpReader.ALL_ACCESSIONS.forEach(function(acc) {
+    this.getAccessions().forEach(function(acc) {
         self.getSnp(acc).forEach(function(snp) {
             if (snp[0] == position) {
                 results.push(acc);
