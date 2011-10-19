@@ -2216,7 +2216,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
                 }
                 jQuery(canvas).unbind('panend',arguments.callee);
             });
-        });
+        },false);
     
         canvas.addEventListener('zoomChange', function() {
            if (renderer.zoom < 3.8 && renderer.zoom > 3.5 ) {
@@ -2238,7 +2238,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
                amino_acids_shown = false;        
            }
            renderer.refresh();
-       });
+       },false);
    
     };
 
@@ -2341,7 +2341,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
                    little_ticks.hide();
                    little_labels.hide();
                }
-        });
+        },false);
     };
 
     clazz.prototype.setSequence = function(sequence) {
@@ -3954,7 +3954,15 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
             point.y = 0;
             nav_width_track_canvas_ctm = point.matrixTransform(ctm).x;
             ctm_refresh.forEach(function(el) {
-                if (el.getBBox().width > 0) {
+                var width = 0;
+                try {
+                    width = el.getBBox().width;
+                } catch (err) {
+                    // This is a bug with Firefox on some elements getting
+                    // the bounding box. We silently fail here, as I can't
+                    // figure out why the call to getBBox fails.
+                }
+                if ( width > 0) {
                     var a_y = /translate\((-?\d+\.?\d*)\s*,?\s*(-?\d+\.?\d*)\)/.exec(el.getAttribute('transform') || '');
                     if (typeof a_y != 'undefined') {
                         a_y = a_y[2];

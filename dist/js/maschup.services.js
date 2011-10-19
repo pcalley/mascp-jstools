@@ -3326,7 +3326,6 @@ MASCP.SnpReader.prototype.setupSequenceRenderer = function(renderer) {
     var reader = this;
     
     reader.bind('resultReceived', function() {
-        var accessions = (typeof reader.accession !== 'undefined') ? reader.accession.split(',') : [].concat(MASCP.SnpReader.ALL_ACCESSIONS);
         var a_result = reader.result;
 
         MASCP.registerGroup('insertions');
@@ -3334,6 +3333,8 @@ MASCP.SnpReader.prototype.setupSequenceRenderer = function(renderer) {
 
         renderer.withoutRefresh(function() {        
         var insertions_layer;
+
+        var accessions = a_result.getAccessions();
         
         while (accessions.length > 0) {
 
@@ -3350,11 +3351,19 @@ MASCP.SnpReader.prototype.setupSequenceRenderer = function(renderer) {
 
 
             var in_layer = 'all'+acc;
-            
+            var group_layer = acc.indexOf('_') >= 0 ? (acc.split('_')[0]) : null;
+            if (['SALK','MPICAO','GMI'].indexOf(group_layer) < 0) {
+                group_layer = null;
+            }
             var ins = [];
             var outs = [];
 
-            var acc_layer = renderer.registerLayer(in_layer, {'fullname' : acc, 'group' : 'insertions' });
+            if (group_layer) {
+                MASCP.registerGroup(group_layer);
+                renderer.registerLayer(group_layer+'_controller', {'fullname' : group_layer, 'group' : 'insertions' , 'color' : '#ff0000'});
+            }
+
+            var acc_layer = renderer.registerLayer(in_layer, {'fullname' : acc, 'group' : group_layer || 'insertions' });
             
             (function(this_acc) {
                 return function() {
@@ -3395,10 +3404,10 @@ MASCP.SnpReader.prototype.setupSequenceRenderer = function(renderer) {
                         return function() {
                             visible = ! visible;
                             renderer.withoutRefresh(function() {
-                            reader.result.getSnpsForPosition(posn).forEach(function(an_acc) {
-                                reader.showSnp(MASCP.renderer,an_acc);
-                                MASCP.getLayer('all'+an_acc).href(visible);
-                            });
+                                reader.result.getSnpsForPosition(posn).forEach(function(an_acc) {
+                                    reader.showSnp(MASCP.renderer,an_acc);
+                                    MASCP.getLayer('all'+an_acc).href(visible);
+                                });
                             });
                             renderer.refresh();
                         };
@@ -3414,6 +3423,9 @@ MASCP.SnpReader.prototype.setupSequenceRenderer = function(renderer) {
         
             if (renderer.createGroupController) {
                 renderer.createGroupController('insertions_controller','insertions');
+                if (group_layer) {
+                    renderer.createGroupController(group_layer+'_controller',group_layer);
+                }
             }
         }
         });
@@ -3421,6 +3433,17 @@ MASCP.SnpReader.prototype.setupSequenceRenderer = function(renderer) {
         jQuery(renderer).trigger('resultsRendered',[reader]);
         
     });
+};
+
+MASCP.SnpReader.Result.prototype.getAccessions = function() {
+    var snps_data = this._raw_data.data;
+    var results = [];
+    for (var acc in snps_data) {
+        if (snps_data.hasOwnProperty(acc)) {
+            results.push(acc);
+        }
+    }
+    return results;
 };
 
 MASCP.SnpReader.Result.prototype.getSnp = function(accession) {
