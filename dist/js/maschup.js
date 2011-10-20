@@ -7247,7 +7247,7 @@ var addElementToLayerWithLink = function(layerName,url,width) {
 };
 
 var all_annotations = {};
-var default_annotation_height = 15;
+var default_annotation_height = 8;
 
 var addAnnotationToLayer = function(layerName,width,opts) {
     var canvas = this._renderer._canvas;
@@ -7292,7 +7292,7 @@ var addAnnotationToLayer = function(layerName,width,opts) {
     if ( ! blob_exists ) {
         blob._value = 0;
         this._renderer._layer_containers[layerName].push(blob);
-        this._renderer._layer_containers[layerName].fixed_track_height = height;
+        this._renderer._layer_containers[layerName].fixed_track_height = default_annotation_height;
     }
     
     blob._value += width;
@@ -7366,6 +7366,8 @@ MASCP.CondensedSequenceRenderer.prototype.removeAnnotations = function(lay) {
     }
     all_annotations[layerName] = null;
     delete all_annotations[layerName];
+    delete this._layer_containers[layerName].fixed_track_height;
+
 };
 
 MASCP.CondensedSequenceRenderer.prototype.redrawAnnotations = function(layerName) {
@@ -7374,7 +7376,7 @@ MASCP.CondensedSequenceRenderer.prototype.redrawAnnotations = function(layerName
     
     var max_value = 0;
     var height = default_annotation_height;
-    var offset = this._RS * height / 2;
+    var offset = 0;
     for (blob_idx in all_annotations[layerName]) {
         if (all_annotations[layerName].hasOwnProperty(blob_idx)) {
             if ( all_annotations[layerName][blob_idx]._value > max_value ) {
@@ -7391,10 +7393,12 @@ MASCP.CondensedSequenceRenderer.prototype.redrawAnnotations = function(layerName
     for (blob_idx in all_annotations[layerName]) {
         if (all_annotations[layerName].hasOwnProperty(blob_idx)) {
             var a_blob = all_annotations[layerName][blob_idx];
-            var size_val = (0.3 + (0.6 * a_blob._value) / max_value)*(this._RS * height * 0.5);
+            var size_val = (0.3 + (0.6 * a_blob._value) / max_value)*(this._RS * height * 1);
+            offset = 0.5*((this._RS * height * 1) - size_val);
             var curr_transform = a_blob.getAttribute('transform');
             var transform_shift = ((-315.0/1000.0)*size_val);
             var rotate_shift = (1.0/3.0)*size_val;
+            a_blob.firstChild.setAttribute('y',offset);
             curr_transform = curr_transform.replace(/translate\(\s*(-?\d+\.?\d*)\s*\)/,'translate('+transform_shift+')');
             curr_transform = curr_transform.replace(/,\s*(-?\d+\.?\d*)\s*,\s*\d+\.?\d*\s*\)/,','+rotate_shift+','+offset+')');
             a_blob.setAttribute('transform', curr_transform);
@@ -7640,6 +7644,7 @@ clazz.prototype.refresh = function(animated) {
         
         var name = order[i];
         var container = layer_containers[name];
+        var y_val;
         if (! this.isLayerActive(name)) {
             var attrs = { 'y' : -1*(this._axis_height)*RS, 'height' :  RS * container.track_height / this.zoom ,'visibility' : 'hidden' };
 //            var attrs = { 'y' : (this._axis_height  + (track_heights - container.track_height )/ this.zoom)*RS, 'height' :  RS * container.track_height / this.zoom ,'visibility' : 'hidden' };
@@ -7677,30 +7682,33 @@ clazz.prototype.refresh = function(animated) {
             }
         }
         if (container.fixed_track_height) {
-            
+
             var track_height = container.fixed_track_height;
-            var y_val = this._axis_height + (track_heights / this.zoom);
-            
+
+            y_val = this._axis_height + (track_heights  - track_height*0.3) / this.zoom;
+
             if (animated) {
-                container.animate({ 'visibility' : 'visible','y' : Math.round((y_val)*RS) });
+                container.animate({ 'visibility' : 'visible','y' : (y_val)*RS });
             } else {
-                container.attr({ 'visibility' : 'visible','y' : Math.round((y_val)*RS) });                
+                container.attr({ 'visibility' : 'visible','y' : (y_val)*RS });                
             }
             
             if (this.navigation) {
                 var grow_scale = this.grow_container ? 1 / this.zoom : 1;
-                this.navigation.renderTrack(MASCP.getLayer(name), (y_val+track_height/3)*RS , RS * track_height/3, { 'font-scale' : (container.track_height / track_height) * 3 * grow_scale } );
+                this.navigation.renderTrack(MASCP.getLayer(name), (y_val)*RS , RS * track_height, { 'font-scale' : (container.track_height / track_height) * 3 * grow_scale } );
             }
             track_heights += (this.zoom * track_height) + this.trackGap;
         } else {
-            
+            y_val = this._axis_height + track_heights / this.zoom;
             if (animated) {
-                container.animate({ 'visibility': 'visible', 'y' : (this._axis_height + track_heights / this.zoom )*RS, 'height' :  RS * container.track_height / this.zoom });
+                container.animate({ 'visibility': 'visible', 'y' : y_val*RS, 'height' :  RS * container.track_height / this.zoom });
             } else {
-                container.attr({ 'visibility': 'visible', 'y' : (this._axis_height + track_heights / this.zoom )*RS, 'height' :  RS * container.track_height / this.zoom });                
+                container.attr({ 'visibility': 'visible', 'y' : y_val*RS, 'height' :  RS * container.track_height / this.zoom });                
             }
             if (this.navigation) {
-                this.navigation.renderTrack(MASCP.getLayer(name), (this._axis_height + track_heights / this.zoom )*RS , RS * container.track_height / this.zoom );
+                y_val -= 1*container.track_height/this.zoom;
+                this.navigation.renderTrack(MASCP.getLayer(name), y_val*RS , RS * 3 * container.track_height / this.zoom );
+                track_heights += container.track_height;
             }
             track_heights += container.track_height + this.trackGap;
         }
@@ -8567,7 +8575,7 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
 
         this.renderTrack = function(track,y,height,options) {
             var label_group = track_canvas.group();
-            var a_rect = track_canvas.rect(0,y-1*height,'100%',3*height);
+            var a_rect = track_canvas.rect(0,y,'100%',height);
             a_rect.setAttribute('stroke','#000000');
             a_rect.setAttribute('stroke-width','2');
             a_rect.setAttribute('fill','url(#simple_gradient)');
@@ -8591,11 +8599,11 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
         
         
             var text_scale = (options && options['font-scale']) ? options['font-scale'] : 1;
-            var text_left = 4*touch_scale*height*text_scale;            
+            var text_left = 4/3*touch_scale*height*text_scale;            
             var a_text = track_canvas.text(text_left,y+0.5*height,track.fullname);
-            a_text.setAttribute('height', 2*height);
-            a_text.setAttribute('width', 2*height);
-            a_text.setAttribute('font-size',2*height*text_scale);
+            a_text.setAttribute('height', height);
+            a_text.setAttribute('width', height);
+            a_text.setAttribute('font-size',0.6*height*text_scale);
             a_text.setAttribute('fill','#ffffff');
             a_text.setAttribute('stroke','#ffffff');
             a_text.setAttribute('stroke-width','1');
@@ -8614,7 +8622,7 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
             if (track.href ) {
                 a_anchor = track_canvas.a(track.href);
                 var icon_name = null;
-                var icon_metrics = [0.5*height*text_scale,0,2.5*height*text_scale*touch_scale];
+                var icon_metrics = [0.5*height*text_scale,0,height*text_scale*touch_scale];
                 icon_metrics[1] = -0.5*(icon_metrics[2] - height);
 
                 circ = track_canvas.circle(icon_metrics[0]+0.5*icon_metrics[2],0.5*height,0.5*icon_metrics[2]);
@@ -8677,7 +8685,7 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
                     return;
                 }
             
-                var t_height = 1.5*height*touch_scale;            
+                var t_height = 0.5*height*touch_scale;            
 
                 if ( ! close_buttons) {
                     close_buttons = [];
@@ -8702,7 +8710,7 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
                     controller_buttons = [];
                 }
 
-                var t_height = 1.5*height*touch_scale;
+                var t_height = 0.5*height*touch_scale;
                 var expander = track_canvas.group();
                 circ = track_canvas.circle(1.5*t_height,0,t_height);
                 circ.setAttribute('fill','#ffffff');
