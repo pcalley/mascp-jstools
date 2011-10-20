@@ -5117,31 +5117,27 @@ MASCP.SequenceRenderer.prototype.registerLayer = function(layer,options) {
  * @see MASCP.Group#event:visibilityChange
  */
 MASCP.SequenceRenderer.prototype.setGroupVisibility = function(grp,visibility,consumeChange) {
-    var groupName = grp;
-    var group;
-    if (typeof grp != 'string') {
-        groupName = grp.name;
-        group = grp;
-    } else {
-        group = MASCP.groups[grp];
-        if ( ! group ) {
-            return;
-        }
-        groupName = group.name;
-    }
+    var group = MASCP.getGroup(grp);
+    var groupName = group.name;
     
     var renderer = this;
-    jQuery(group._layers).each(function(i) {
+
+    group.eachLayer(function(layer) {
+        if (MASCP.getGroup(layer) === layer) {
+            // We can skip explicitly setting the visibility of groups here, since
+            // any sub-groups should have a controller.
+            return;
+        }
         if (this.disabled && visibility) {
-            renderer.hideLayer(this.name,true);
+            renderer.hideLayer(layer.name);
             return;
         }
         if (visibility === true) {
-            renderer.showLayer(this.name,true);
+            renderer.showLayer(layer.name);
         } else if (visibility === false) {
-            renderer.hideLayer(this.name,true);                
+            renderer.hideLayer(layer.name);                
         } else {
-            renderer.toggleLayer(this.name,true);
+            renderer.toggleLayer(layer.name);
         }
     });
     if (visibility !== null && ! consumeChange) {
@@ -5415,7 +5411,10 @@ MASCP.getGroup = function(group) {
     if ( ! MASCP.groups ) {
         return;
     }
-    return (typeof group == 'string') ? MASCP.groups[group] : group;
+    if (typeof group == 'string') {
+        return MASCP.groups[group];
+    }
+    return (group == MASCP.groups[group.name]) ? group : null;
 };
 
 MASCP.SequenceRenderer.prototype._removeOtherBindings = function(object,inputElement) {
@@ -8034,8 +8033,8 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
             });
 
             jQuery(layer).bind('visibilityChange',function(ev,rend,visible) {
-                if (group.length > 0) {            
-                    self.setGroupVisibility(group, expanded && visible,true);
+                if (group.size() > 0) {            
+                    self.setGroupVisibility(group, expanded_map[layer.name] && visible,true);
                     renderer.refresh();
                 }
             });
