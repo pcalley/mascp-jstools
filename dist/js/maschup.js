@@ -605,7 +605,7 @@ MASCP.Service.prototype.gotResult = function()
 {
     var self = this;
     
-    var reader_cache = function(e,thing) {
+    var reader_cache = function(thing) {
         if ( ! thing.readers ) {
             thing.readers = [];
         }
@@ -4626,7 +4626,7 @@ MASCP.registerGroup = function(groupName, options)
     
     this.groups[groupName] = group;
     
-    jQuery(MASCP).trigger('groupRegistered',[group]);
+    bean.fire(MASCP,'groupRegistered',[group]);
     
     return group;
 };
@@ -4700,7 +4700,7 @@ MASCP.registerLayer = function(layerName, options)
     }
     layer.layer_id = new Date().getMilliseconds();
     
-    jQuery(MASCP).trigger('layerRegistered',[layer]);
+    bean.fire(MASCP,'layerRegistered',[layer]);
     
     return layer;
 };
@@ -5264,14 +5264,14 @@ MASCP.SequenceRenderer.prototype.createLayerController = function() {
     };
 
     
-    jQuery(MASCP).bind("layerRegistered",function(e,layer) {
+    bean.add(MASCP,"layerRegistered",function(e,layer) {
         if (layer.group && layer.group.hide_member_controllers) {
             return;
         }
         controller_box.add_layer(layer);
     });
 
-    jQuery(MASCP).bind("groupRegistered",function(e,group) {
+    bean.add(MASCP,"groupRegistered",function(e,group) {
         if (group.hide_group_controller) {
             return;
         }
@@ -6461,7 +6461,7 @@ MASCP.CondensedSequenceRenderer = function(sequenceContainer) {
     
     // When we have a layer registered with the global MASCP object
     // add a track within this rendererer.
-    jQuery(MASCP).bind('layerRegistered', function(e,layer) {
+    bean.add(MASCP,'layerRegistered', function(layer) {
         self.addTrack(layer);
     });
     
@@ -7571,8 +7571,6 @@ var vis_change_event = function(e,renderer,visibility) {
 clazz.prototype.addTrack = function(layer) {
     var RS = this._RS;
 
-    var order = this.trackOrder || [];
-    
     if ( ! this._canvas ) {
         this.bind('sequencechange',function() {
             this.addTrack(layer);
@@ -7585,7 +7583,6 @@ clazz.prototype.addTrack = function(layer) {
 
     if ( ! layer_containers[layer.name] ) {                
         layer_containers[layer.name] = this._canvas.set();
-        order = order.concat([layer.name]);
         if ( ! layer_containers[layer.name].track_height) {
             layer_containers[layer.name].track_height = 4;
         }
@@ -7611,6 +7608,7 @@ clazz.prototype.removeTrack = function(layer) {
         });
         this.removeAnnotations(layer);
         layer_containers[layer.name] = null;
+        delete layer_containers[layer.name];
         var order = this.trackOrder;
         if (order.indexOf(layer.name) >= 0) {
             order.splice(order.indexOf(layer.name),1);
@@ -8001,7 +7999,15 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
         var controller_map = {};
         var expanded_map = {};
         
-        
+        var old_remove_track = renderer.removeTrack;
+
+        renderer.removeTrack = function(layer) {
+            old_remove_track.call(this,layer);
+            delete controller_map[layer.name];
+            delete expanded_map[layer.name];
+        };
+
+
         this.isController = function(layer) {
             if (controller_map[layer.name]) {
                 return true;
