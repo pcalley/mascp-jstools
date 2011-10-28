@@ -2685,17 +2685,18 @@ MASCP.InterproReader.Result.prototype.getDomains = function()
 MASCP.InterproReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 {
     var reader = this;
-    MASCP.registerGroup('interpro_domains', {'fullname' : 'Interpro domains', 'color' : '#000000' });
-
-    var overlay_name = 'interpro_controller';
-
-    var css_block = '.active .overlay { background: #000000; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
-    
-    MASCP.registerLayer(overlay_name,{ 'fullname' : 'Interpro domains', 'color' : '#000000', 'css' : css_block });
 
     this.bind('resultReceived', function() {
         var agi = this.agi;
         
+        MASCP.registerGroup('interpro_domains', {'fullname' : 'Interpro domains', 'color' : '#000000' });
+
+        var overlay_name = 'interpro_controller';
+
+        var css_block = '.active .overlay { background: #000000; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
+
+        MASCP.registerLayer(overlay_name,{ 'fullname' : 'Interpro domains', 'color' : '#000000', 'css' : css_block });
+
         MASCP.getLayer('interpro_controller').href = '';
         this.result.sequence = sequenceRenderer.sequence;
         var domains = this.result.getDomains();
@@ -4673,7 +4674,10 @@ MASCP.registerLayer = function(layerName, options)
         this.layers = {};
     }
     if (this.layers[layerName]) {
-        this.layers[layerName].disabled = false;
+        if (this.layers[layerName].disabled) {
+            this.layers[layerName].disabled = false;
+            bean.fire(MASCP,'layerRegistered',[this.layers[layerName]]);
+        }
         return this.layers[layerName];
     }
     
@@ -4804,10 +4808,12 @@ MASCP.SequenceRenderer = (function() {
                     }
                 }
 
-                for (i = ((this._track_order || []).length - 1); i >= 0; i--) {
-                    if (track_order.indexOf(this._track_order[i]) < 0) {
-                        this.hideLayer(this._track_order[i]);
-                        jQuery(MASCP.getLayer(this._track_order[i])).trigger('removed');
+                for (i = ((renderer_track_order || []).length - 1); i >= 0; i--) {
+                    if (track_order.indexOf(renderer_track_order[i]) < 0) {
+                        this.hideLayer(renderer_track_order[i]);
+                        this.hideGroup(renderer_track_order[i]);
+                        jQuery(MASCP.getLayer(renderer_track_order[i])).trigger('removed');
+                        jQuery(MASCP.getGroup(renderer_track_order[i])).trigger('removed');
                     }
                 }
                 renderer_track_order = track_order;
@@ -5427,6 +5433,9 @@ MASCP.getLayer = function(layer) {
  * @see MASCP.Group
  */
 MASCP.getGroup = function(group) {
+    if (typeof group == 'undefined') {
+        return;
+    }
     if ( ! MASCP.groups ) {
         return;
     }
@@ -5716,7 +5725,7 @@ var SVGCanvas = SVGCanvas || (function() {
         an_array.currenty = function() {
             var a_y;
             
-            if (an_array[0].getAttribute('transform')) {                    
+            if (an_array[0] && an_array[0].getAttribute('transform')) {
                 a_y = /translate\((-?\d+\.?\d*)\s*,?\s*(-?\d+\.?\d*)\)/.exec(an_array[0].getAttribute('transform'));
                 if (typeof a_y != 'undefined') {
                     a_y = a_y[2];
@@ -5842,11 +5851,7 @@ var SVGCanvas = SVGCanvas || (function() {
             var curr_disp = an_array.visibility();
             
             var targ_y = parseInt(hash.y,10);
-
             targ_disp = hash.visibility;
-            if (curr_disp == targ_disp && targ_disp == 'hidden' && targ_y > 0) {
-                return;
-            }
             
             for (key in hash) {
                 if (hash.hasOwnProperty(key)) {
@@ -6488,7 +6493,6 @@ MASCP.CondensedSequenceRenderer = function(sequenceContainer) {
     jQuery(this).bind('sequenceChange',function() {
         for (var layername in MASCP.layers) {
             if (MASCP.layers.hasOwnProperty(layername)) {
-                self.addTrack(MASCP.layers[layername]);
                 MASCP.layers[layername].disabled = true;
             }
         }
@@ -7567,7 +7571,7 @@ MASCP.CondensedSequenceRenderer.prototype._resizeContainer = function() {
 
 var vis_change_event = function(e,renderer,visibility) {
     var self = this;
-    if ( renderer._layer_containers[self.name].length <= 0 ) {
+    if ( ! renderer._layer_containers[self.name] || renderer._layer_containers[self.name].length <= 0 ) {
         return;
     }
     
@@ -7575,7 +7579,6 @@ var vis_change_event = function(e,renderer,visibility) {
         if (renderer._layer_containers[self.name].tracers) {
             renderer._layer_containers[self.name].tracers.hide();
         }
-        renderer._layer_containers[self.name].attr({ 'y': -1000 });
     }
 };
 
@@ -7586,7 +7589,8 @@ var vis_change_event = function(e,renderer,visibility) {
  */
 clazz.prototype.addTrack = function(layer) {
     var RS = this._RS;
-
+    var renderer = this;
+    
     if ( ! this._canvas ) {
         this.bind('sequencechange',function() {
             this.addTrack(layer);
@@ -7595,9 +7599,10 @@ clazz.prototype.addTrack = function(layer) {
         console.log("No canvas, cannot add track, waiting for sequencechange event");
         return;
     }
+
     var layer_containers = this._layer_containers || [];
 
-    if ( ! layer_containers[layer.name] ) {                
+    if ( ! layer_containers[layer.name] || layer_containers[layer.name] === null) {
         layer_containers[layer.name] = this._canvas.set();
         if ( ! layer_containers[layer.name].track_height) {
             layer_containers[layer.name].track_height = 4;
@@ -7610,6 +7615,9 @@ clazz.prototype.addTrack = function(layer) {
         for (var i = 0 ; i < event_names.length; i++) {
             jQuery(layer_containers[layer.name]._event_proxy).bind(event_names[i],ev_function);
         }
+        jQuery(layer).unbind('removed').bind('removed',function() {
+            renderer.removeTrack(this);
+        });
     }
     
     this._layer_containers = layer_containers;
@@ -7617,22 +7625,18 @@ clazz.prototype.addTrack = function(layer) {
 };
 
 clazz.prototype.removeTrack = function(layer) {
+    if (! this._layer_containers ) {
+        return;
+    }
     var layer_containers = this._layer_containers || [];
     if ( layer_containers[layer.name] ) {                
         layer_containers[layer.name].forEach(function(el) {
             el.parentNode.removeChild(el);
         });
         this.removeAnnotations(layer);
-        layer_containers[layer.name] = null;
-        delete layer_containers[layer.name];
-        var order = this.trackOrder;
-        if (order.indexOf(layer.name) >= 0) {
-            order.splice(order.indexOf(layer.name),1);
-        }
-        this.trackOrder = order;
+        this._layer_containers[layer.name] = null;
+        layer.disabled = true;
     }
-    
-    this._layer_containers = layer_containers;
     
 };
 
@@ -7658,21 +7662,24 @@ clazz.prototype.refresh = function(animated) {
         
         var name = order[i];
         var container = layer_containers[name];
+        if ( ! container ) {
+            continue;
+        }
         var y_val;
         if (! this.isLayerActive(name)) {
             var attrs = { 'y' : -1*(this._axis_height)*RS, 'height' :  RS * container.track_height / this.zoom ,'visibility' : 'hidden' };
 //            var attrs = { 'y' : (this._axis_height  + (track_heights - container.track_height )/ this.zoom)*RS, 'height' :  RS * container.track_height / this.zoom ,'visibility' : 'hidden' };
-
             if (MASCP.getLayer(name).group) {
                 var controller_track = this.navigation.getController(MASCP.getLayer(name).group);
                 if (controller_track && this.isLayerActive(controller_track)) {
-//                    attrs.y = layer_containers[controller_track.name].currenty;
+                    attrs.y = layer_containers[controller_track.name].currenty();
                 }
             }
             
             if (container.fixed_track_height) {
                 delete attrs.height;
             }
+
             if (animated) {                
                 container.animate(attrs);
             } else {
