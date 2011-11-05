@@ -512,6 +512,9 @@ base.retrieve = function(agi,callback)
 
     if (agi && callback) {
         this.agi = agi;
+
+        this.result = null;
+        
         var done_result = false;
         var done_func = function(err) {
             bean.remove(self,"resultReceived",done_func);
@@ -636,6 +639,7 @@ base.retrieve = function(agi,callback)
             get_db_data(id,self.toString(),function(err,data) {
                 if (data) {
                     if (cback) {
+                        self.result = null;
                         bean.add(self,"resultReceived",function() {
                             bean.remove(self,"resultReceived",arguments.callee);
                             cback.call(self);
@@ -3166,7 +3170,6 @@ MASCP.RippdbReader.Result = MASCP.RippdbReader.Result;
  */
 MASCP.RippdbReader.Result.prototype.getSpectra = function()
 {
-    var content = null;
 
     if (! this._raw_data || ! this._raw_data.spectra ) {
         return [];
