@@ -1504,7 +1504,8 @@ MASCP.Service.Result.prototype = {
 
 MASCP.Service.Result.prototype.render = function() {
 //    return window.jQuery('<span>Result received for '+this.agi+'</span>');
-};/**
+};
+/**
  * @fileOverview    Classes for reading data from TAIR database
  */
 
@@ -7843,6 +7844,10 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
             if (! self._canvas) {
                 return;
             }
+            if (self.zoomCenter == 'center') {
+                self.zoomCenter = {'x' : 0.5 * self.sequence.length * self._RS * ((self._canvas.width.baseVal.value + self._canvas.currentTranslate.x) / self._canvas.width.baseVal.value) };
+            }
+            
             if ( self.zoomCenter && ! center_residue ) {
                 start_x = self._canvas.currentTranslate.x || 0;
                 center_residue = self.zoomCenter ? self.zoomCenter.x : 0;
