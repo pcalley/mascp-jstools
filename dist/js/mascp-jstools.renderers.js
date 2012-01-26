@@ -1637,7 +1637,7 @@ var SVGCanvas = SVGCanvas || (function() {
 
             var text = this.text(x+width/2,y+(height/3),txt);        
             text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('dominant-baseline', 'hanging');
+            text.firstChild.setAttribute('dy', '1.5ex');
             text.setAttribute('font-size',0.5*height);
             text.setAttribute('fill','#ffffff');
             button.push(back);
@@ -1783,8 +1783,8 @@ var SVGCanvas = SVGCanvas || (function() {
             text.setAttribute('font-size',r*RS);
             text.setAttribute('font-weight','bolder');
             text.setAttribute('fill','#ffffff');
-            text.setAttribute('style','font-family: sans-serif; text-anchor: middle; dominant-baseline: hanging;');
-            text.setAttribute('dominant-baseline','hanging');
+            text.setAttribute('style','font-family: sans-serif; text-anchor: middle;');
+            text.firstChild.setAttribute('dy','1.5ex');
             text.setAttribute('text-anchor','middle');
             marker_group.push(text);
 
@@ -1851,10 +1851,13 @@ var SVGCanvas = SVGCanvas || (function() {
         };
         canvas.text = function(x,y,text) {
             var a_text = document.createElementNS(svgns,'text');
+            var a_tspan = document.createElementNS(svgns, 'tspan');
             if (typeof text != 'string') {
                 a_text.appendChild(text);
             } else {
-                a_text.textContent = text;
+                a_text.appendChild(a_tspan);
+                a_tspan.textContent = text;
+                a_tspan.setAttribute('dy','0');
             }
             a_text.style.fontFamily = 'Helvetica, Verdana, Arial, Sans-serif';
             a_text.setAttribute('x',typeof x == 'string' ? x : x * RS);
@@ -2222,11 +2225,12 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
         } else {    
             for (var i = 0; i < seq_chars.length; i++) {
                 a_text = canvas.text(x,12,seq_chars[i]);
+                a_text.firstChild.setAttribute('dy','1.5ex');
                 amino_acids.push(a_text);
                 a_text.style.fontFamily = "'Lucida Console', Monaco, monospace";
                 x += 1;
             }
-            amino_acids.attr( { 'y':-1000,'width': RS,'text-anchor':'start','dominant-baseline':'hanging','height': RS,'font-size':RS,'fill':'#000000'});
+            amino_acids.attr( { 'y':-1000,'width': RS,'text-anchor':'start','height': RS,'font-size':RS,'fill':'#000000'});
         }
         canvas.addEventListener('panstart', function() {
             amino_acids.attr( { 'y' : '-1000'});
@@ -2302,14 +2306,14 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
         for ( i = 0; i < big_labels.length; i++ ) {
             big_labels[i].style.textAnchor = 'middle';
             big_labels[i].setAttribute('text-anchor','middle');
-            big_labels[i].setAttribute('dominant-baseline','hanging');
+            big_labels[i].firstChild.setAttribute('dy','1.5ex');
             big_labels[i].setAttribute('font-size',7*RS+'pt');
         }
 
         for ( i = 0; i < little_labels.length; i++ ) {
             little_labels[i].style.textAnchor = 'middle';
             little_labels[i].setAttribute('text-anchor','middle');
-            little_labels[i].setAttribute('dominant-baseline','hanging');
+            little_labels[i].firstChild.setAttribute('dy','1.5ex');
             little_labels[i].setAttribute('font-size',2*RS+'pt');        
             little_labels[i].style.fill = '#000000';
         }
@@ -4124,7 +4128,7 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
             a_text.setAttribute('fill','#ffffff');
             a_text.setAttribute('stroke','#ffffff');
             a_text.setAttribute('stroke-width','1');
-            a_text.setAttribute('dominant-baseline', 'middle');
+            a_text.firstChild.setAttribute('dy', '0.5ex');
 
             // r = track_canvas.rect(3*height*text_scale,y+0.5*height,2*height,2*height);
             // r.setAttribute('fill','#00ff00');
@@ -4250,7 +4254,6 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
                 group_toggler.setAttribute('height', 1.75*t_height);
                 group_toggler.setAttribute('font-size',1.5*t_height);
                 group_toggler.setAttribute('fill','#ffffff');
-                group_toggler.setAttribute('dominant-baseline','central');
                 group_toggler.setAttribute('pointer-events','none');
             
                 expander.push(group_toggler);
