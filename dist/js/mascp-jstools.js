@@ -3471,9 +3471,9 @@ MASCP.ProcessingReader.prototype.setupSequenceRenderer = function(sequenceRender
         if (pos < 0) {
             return;
         }
-        MASCP.registerLayer('processing',{ 'fullname' : 'Processing', 'color' : '#ffEEEE', 'css' : css_block });
+        MASCP.registerLayer('processing',{ 'fullname' : 'N-Terminal (mod)', 'color' : '#ffEEEE', 'css' : css_block });
         sequenceRenderer.getAA(1).addBoxOverlay('processing',(pos+pep.length+0.5),1);
-        sequenceRenderer.getAA(pos+1+pep.length).addAnnotation('processing',1, { 'border' : 'rgb(150,0,0)', 'content' : '➜', 'angle': 0 });
+        sequenceRenderer.getAA(pos+1+pep.length).addAnnotation('processing',1, { 'border' : 'rgb(150,0,0)', 'content' : 'M', 'angle': 0 });
 
         jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);
     });
@@ -4016,7 +4016,7 @@ MASCP.RnaEditReader.prototype.setupSequenceRenderer = function(renderer) {
 
             var ins = [];
             var outs = [];
-            var acc_layer = renderer.registerLayer(in_layer, {'fullname' : acc_fullname });
+            var acc_layer = renderer.registerLayer(in_layer, {'fullname' : 'RNA Edit (mod)' });
 
             MASCP.getLayer(in_layer).icon = null;
             var i;
@@ -4426,9 +4426,9 @@ MASCP.UbiquitinReader.prototype.setupSequenceRenderer = function(sequenceRendere
         var icons = [];
         
         if (peps.length > 0) {
-            MASCP.registerLayer(overlay_name,{ 'fullname' : 'Ubiquitin (mod)', 'color' : '#666666', 'css' : css_block });
+            MASCP.registerLayer(overlay_name,{ 'fullname' : 'UBQ (mod)', 'color' : '#666666', 'css' : css_block });
 
-            MASCP.registerGroup(group_name, {'fullname' : 'Ubiquitin', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#666666' });
+            MASCP.registerGroup(group_name, {'fullname' : 'UBQ', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#666666' });
             if (sequenceRenderer.createGroupController) {
                 sequenceRenderer.createGroupController(overlay_name,group_name);
             }
@@ -4447,7 +4447,7 @@ MASCP.UbiquitinReader.prototype.setupSequenceRenderer = function(sequenceRendere
 
         for (var i = 0; i < peps.length; i++) {
             var layer_name = 'ubiquitin_peptide_'+i;
-            MASCP.registerLayer(layer_name, { 'fullname': 'Peptide '+i, 'group' : group_name, 'color' : '#666666', 'css' : css_block });
+            MASCP.registerLayer(layer_name, { 'fullname': 'Peptide', 'group' : group_name, 'color' : '#666666', 'css' : css_block });
             var peptide = peps[i].sequence;
             var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide);
             if (peptide_bits.length === 0){
