@@ -2214,7 +2214,7 @@ MASCP.GelMapReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.GelMapReader.SERVICE_URL = ' http://gelmap.de/gator2.php?';
+MASCP.GelMapReader.SERVICE_URL = 'http://gelmap.de/gator2.php?';
 
 MASCP.GelMapReader.prototype.requestData = function()
 {
@@ -7118,6 +7118,9 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
             amino_acids.attr( { 'y':-1000,'width': RS,'text-anchor':'start','height': RS,'font-size':RS,'fill':'#000000'});
         }
         var update_sequence = function() {
+            if (renderer.sequence.length <= 1500) {
+                return;
+            }
             var start = parseInt(renderer.leftVisibleResidue());
             start -= 50;
             if (start < 0) { 
