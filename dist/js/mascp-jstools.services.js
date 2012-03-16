@@ -1874,7 +1874,7 @@ MASCP.GelMapReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.GelMapReader.SERVICE_URL = 'http://gelmap.de/gator2.php?';
+MASCP.GelMapReader.SERVICE_URL = ' http://gelmap.de/gator2.php?';
 
 MASCP.GelMapReader.prototype.requestData = function()
 {
