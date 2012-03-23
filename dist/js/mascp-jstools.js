@@ -8631,7 +8631,12 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
             curr_transform = 'scale('+scale_value+') '+(curr_transform || '');
             self._canvas.parentNode.setAttribute('transform',curr_transform);
             jQuery(self._canvas).trigger('_anim_begin');
-
+            if (document.createEvent) {
+                evObj = document.createEvent('Events');
+                evObj.initEvent('panstart',false,true);
+                self._canvas.dispatchEvent(evObj);
+            }
+            var old_x = self._canvas.currentTranslate.x;
             if (center_residue) {
                 var delta = ((start_zoom - zoom_level)/(scale_value*25))*center_residue;
                 delta += start_x/(scale_value);
@@ -8646,12 +8651,20 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
                 curr_transform = curr_transform.replace(/scale\([^\)]+\)/,'');
                 self._canvas.parentNode.setAttribute('transform',curr_transform);
 
+                if (document.createEvent) {
+                    evObj = document.createEvent('Events');
+                    evObj.initEvent('panend',false,true);
+                    self._canvas.dispatchEvent(evObj);
+                }
                 jQuery(self._canvas).trigger('_anim_end');
 
                 jQuery(self._canvas).one('zoomChange',function() {
                     if (typeof center_residue != 'undefined') {
                         var delta = ((start_zoom - zoom_level)/(25))*center_residue;
                         delta += start_x;
+
+                        self._resizeContainer();
+
                         if (self._canvas.shiftPosition) {
                             self._canvas.shiftPosition(delta,0);
                         } else {
@@ -10872,6 +10885,10 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
             }
             
             if (p.x > viewBoxScale * min_x) {
+                /* Element has shifted too far to the right
+                   Induce some gravity towards the left side
+                   of the screen
+                */
                 targetElement._snapback = setTimeout(function() {
                     var evObj;
                     if (Math.abs(targetElement.currentTranslate.x - (viewBoxScale * min_x)) > 35 ) {
@@ -10911,6 +10928,9 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
                 min_val *= 0.90;
             }
             if (p.x < 0 && Math.abs(p.x) > min_val) {
+                /* Element has shifted too far to the left
+                   Induce some gravity to the right side of the screen
+                */
                 targetElement._snapback = setTimeout(function() {
                     var evObj;
                     
