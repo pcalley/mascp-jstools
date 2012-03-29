@@ -1874,7 +1874,7 @@ MASCP.GelMapReader = MASCP.buildService(function(data) {
                         return this;
                     });
 
-MASCP.GelMapReader.SERVICE_URL = ' http://gelmap.de/gator2.php?';
+MASCP.GelMapReader.SERVICE_URL = 'http://gelmap.de/gator2.php?';
 
 MASCP.GelMapReader.prototype.requestData = function()
 {
@@ -2227,13 +2227,13 @@ MASCP.P3dbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 
     var color = '#5533ff';
     
-    MASCP.registerGroup('p3db_experimental', {'fullname' : 'P3DB MS/MS', 'color' : color });
+    MASCP.registerGroup('p3db_experimental', {'fullname' : 'P3DB (mod)', 'color' : color });
 
     this.bind('resultReceived', function() {
         var res = this.result;
         var peps = res.getPeptides();
         if (peps.length > 0) {
-            MASCP.registerLayer('p3db_controller',{ 'fullname' : 'P3DB MS/MS', 'color' : color });
+            MASCP.registerLayer('p3db_controller',{ 'fullname' : 'P3DB (mod)', 'color' : color });
         }
         for(var i = 0; i < peps.length; i++) {
             var peptide = peps[i].sequence;
@@ -3065,7 +3065,90 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     });
     return this;
 };
-/** @fileOverview   Classes for reading data from the Promex database
+/** @fileOverview   Classes for reading data from the Processing data
+ */
+if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
+
+/** Default class constructor
+ *  @class      Service class that will retrieve data from the Processing data for a given AGI.
+ *  @param      {String} agi            Agi to look up
+ *  @param      {String} endpointURL    Endpoint URL for this service
+ *  @extends    MASCP.Service
+ */
+MASCP.ProcessingReader = MASCP.buildService(function(data) {
+                        this._raw_data = data;
+                        return this;
+                    });
+
+MASCP.ProcessingReader.SERVICE_URL = '?';
+
+MASCP.ProcessingReader.prototype.requestData = function()
+{
+    var agi = this.agi;
+    
+    return {
+        type: "GET",
+        dataType: "json",
+        data: { 'agi'       : agi,
+                'service'   : 'processing' 
+        }
+    };
+};
+
+/**
+ *  @class   Container class for results from the Processing service
+ *  @extends MASCP.Service.Result
+ */
+// We need this line for the JsDoc to pick up this class
+MASCP.ProcessingReader.Result = MASCP.ProcessingReader.Result;
+
+/** Retrieve the peptides for this particular entry from the Processing service
+ *  @returns Array of peptide strings
+ *  @type [String]
+ */
+MASCP.ProcessingReader.Result.prototype.getProcessing = function()
+{
+    var content = null;
+    if (! this._raw_data || ! this._raw_data.data || ! this._raw_data.data.processing ) {
+        return [];
+    }
+
+    return this._raw_data.data.processing;
+};
+
+MASCP.ProcessingReader.Result.prototype._cleanSequence = function(sequence)
+{
+    return sequence.replace(/[^A-Z]/g,'');
+};
+
+MASCP.ProcessingReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
+{
+    var reader = this;
+
+    var css_block = '.active .overlay { background: #666666; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
+    
+    this.bind('resultReceived', function() {
+        var pep = this.result.getProcessing();
+        var pos = sequenceRenderer.sequence.indexOf(pep);
+        if (pos < 0) {
+            return;
+        }
+        MASCP.registerLayer('processing',{ 'fullname' : 'N-Terminal (mod)', 'color' : '#ffEEEE', 'css' : css_block });
+        var aa = sequenceRenderer.getAA(pos+1+pep.length);
+        if (aa) {
+            aa.addAnnotation('processing',1, { 'border' : 'rgb(150,0,0)', 'content' : 'Mat', 'angle': 0 });
+        }
+
+        jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);
+    });
+    return this;
+};
+
+MASCP.ProcessingReader.Result.prototype.render = function()
+{
+};/** @fileOverview   Classes for reading data from the Promex database
  */
 if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
@@ -3551,6 +3634,71 @@ MASCP.SnpReader.Result.prototype.getSnpsForPosition = function(position) {
     this._cached[position] = results;
     return results;
 };
+
+MASCP.cloneService(MASCP.SnpReader,"RnaEditReader");
+
+MASCP.RnaEditReader.SERVICE_URL = '?';
+
+MASCP.RnaEditReader.prototype.requestData = function()
+{
+    var self = this;
+    return {
+        type: "GET",
+        dataType: "json",
+        data: { 'agi'   : this.agi,
+                'service' : 'rnaedit' 
+        }
+    };
+};
+
+MASCP.RnaEditReader.prototype.setupSequenceRenderer = function(renderer) {
+    var reader = this;
+    
+    reader.bind('resultReceived', function() {
+        var a_result = reader.result;
+        renderer.withoutRefresh(function() {        
+        var insertions_layer;
+
+        var accessions = a_result.getAccessions();
+        while (accessions.length > 0) {
+
+            var acc = accessions.shift();
+            var acc_fullname = acc;
+
+            var diffs = a_result.getSnp(acc);
+
+            if (diffs.length < 1) {
+                continue;
+            }
+
+            var in_layer = 'rnaedit';
+
+            var ins = [];
+            var outs = [];
+            var acc_layer = renderer.registerLayer(in_layer, {'fullname' : 'RNA Edit (mod)' });
+
+            MASCP.getLayer(in_layer).icon = null;
+            var i;
+
+            for (i = diffs.length - 1; i >= 0 ; i-- ){
+                outs.push( { 'index' : diffs[i][0] + 1, 'delta' : diffs[i][1] });
+                ins.push( { 'insertBefore' : diffs[i][0] + 1, 'delta' : diffs[i][2] });
+            }
+            
+            for (i = ins.length - 1; i >= 0 ; i-- ) {
+                var pos = ins[i].insertBefore - 1;
+                if (pos > renderer.sequence.length) {
+                    pos = renderer.sequence.length;
+                }
+                renderer.getAA(pos).addAnnotation('rnaedit',1, { 'border' : 'rgb(150,0,0)', 'content' : ins[i].delta, 'angle': 'auto' });
+            }
+        }
+        
+        });
+        jQuery(renderer).trigger('resultsRendered',[reader]);
+    });
+};
+
 /**
  * @fileOverview    Classes for reading data from the Suba database
  */
@@ -3865,7 +4013,138 @@ MASCP.getSequence = function(agi) {
     }
     return self._reader.result.getSequence(); 
 };
+/** @fileOverview   Classes for reading data from the Ubiquitin data
+ */
+if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
+
+/** Default class constructor
+ *  @class      Service class that will retrieve data from the Ubiquitin data for a given AGI.
+ *  @param      {String} agi            Agi to look up
+ *  @param      {String} endpointURL    Endpoint URL for this service
+ *  @extends    MASCP.Service
+ */
+MASCP.UbiquitinReader = MASCP.buildService(function(data) {
+                        this._raw_data = data;
+                        return this;
+                    });
+
+MASCP.UbiquitinReader.SERVICE_URL = '?';
+
+MASCP.UbiquitinReader.prototype.requestData = function()
+{
+    var agi = this.agi;
+    
+    return {
+        type: "GET",
+        dataType: "json",
+        data: { 'agi'       : agi,
+                'service'   : 'ubiquitin' 
+        }
+    };
+};
+
 /**
+ *  @class   Container class for results from the Ubiquitin service
+ *  @extends MASCP.Service.Result
+ */
+// We need this line for the JsDoc to pick up this class
+MASCP.UbiquitinReader.Result = MASCP.UbiquitinReader.Result;
+
+/** Retrieve the peptides for this particular entry from the Ubiquitin service
+ *  @returns Array of peptide strings
+ *  @type [String]
+ */
+MASCP.UbiquitinReader.Result.prototype.getPeptides = function()
+{
+    var content = null;
+    if (! this._raw_data || ! this._raw_data.data  || ! this._raw_data.data.peptides ) {
+        return [];
+    }
+
+    return this._raw_data.data.peptides;
+};
+
+MASCP.UbiquitinReader.Result.prototype._cleanSequence = function(sequence)
+{
+    return sequence.replace(/[^A-Z]/g,'');
+};
+
+MASCP.UbiquitinReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
+{
+    var reader = this;
+
+    var css_block = '.active .overlay { background: #666666; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
+    
+    this.bind('resultReceived', function() {
+        var peps = this.result.getPeptides();
+
+        var overlay_name = 'ubiquitin_experimental';
+        var group_name = 'ubiquitin_peptides';
+        var icons = [];
+        
+        if (peps.length > 0) {
+            MASCP.registerLayer(overlay_name,{ 'fullname' : 'UBQ (mod)', 'color' : '#666666', 'css' : css_block });
+
+            MASCP.registerGroup(group_name, {'fullname' : 'UBQ', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#666666' });
+            if (sequenceRenderer.createGroupController) {
+                sequenceRenderer.createGroupController(overlay_name,group_name);
+            }
+            
+            jQuery(MASCP.getGroup(group_name)).bind('visibilityChange',function(e,rend,vis) {
+                if (rend != sequenceRenderer) {
+                    return;
+                }
+                icons.forEach(function(el) {
+                    el.style.display = vis ? 'none' : 'inline';
+                });
+            });
+            
+            
+        }
+
+        for (var i = 0; i < peps.length; i++) {
+            var layer_name = 'ubiquitin_peptide_'+i;
+            MASCP.registerLayer(layer_name, { 'fullname': 'Peptide', 'group' : group_name, 'color' : '#666666', 'css' : css_block });
+            var peptide = peps[i].sequence;
+            var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide);
+            if (peptide_bits.length === 0){
+                continue;
+            }
+            peptide_bits.addToLayer(layer_name);
+            icons.push(peptide_bits.addToLayer(layer_name));
+
+            for (var k = 0; k < peps[i].positions.length; k++ ) {
+                icons = icons.concat(peptide_bits[peps[i].positions[k] - 1].addToLayer(overlay_name));
+                peptide_bits[peps[i].positions[k] - 1].addToLayer(layer_name);
+            }
+        }
+        jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);
+    });
+    return this;
+};
+/** Retrieve an array of positions that ubiquitin has been experimentally verified to occur upon
+ *  @returns {Array}    Ubiquitin positions upon the full protein
+ */
+MASCP.UbiquitinReader.Result.prototype.getAllExperimentalPositions = function()
+{
+    var peps = this.getPeptides();
+    var results = [];
+    var seen = {};
+    peps.forEach(function(pep) {
+        pep.positions.forEach(function(pos) {
+            if ( ! seen[pos] ) {
+                results.push(pos);
+                seen[pos] = true;
+            }
+        });
+    });
+    return results;
+}
+MASCP.UbiquitinReader.Result.prototype.render = function()
+{
+};/**
  * @fileOverview    Classes for getting arbitrary user data onto the GATOR
  */
 
