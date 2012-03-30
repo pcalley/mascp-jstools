@@ -639,6 +639,13 @@ MASCP.Service.prototype.requestComplete = function()
     bean.fire(MASCP.Service,'requestComplete',[this]);
 };
 
+MASCP.Service.prototype.requestIncomplete = function()
+{
+    bean.fire(this,'requestIncomplete');
+    bean.fire(MASCP.Service,'requestIncomplete',[this]);
+};
+
+
 MASCP.Service.registeredLayers = function(service) {
     var result = [];
     for (var layname in MASCP.layers) {
@@ -675,6 +682,10 @@ MASCP.Service.registeredGroups = function(service) {
 
 MASCP.Service.prototype.bind = function(type,func)
 {
+    console.log("I am here");
+    if (this == MASCP.Service) {
+        console.log("Here!!");
+    }
     bean.add(this,type,func);
     return this;
 };
@@ -930,6 +941,8 @@ base.retrieve = function(agi,callback)
 
                     if (received_flag !== null && typeof received_flag !== 'undefined') {
                         self.requestComplete();
+                    } else {
+                        self.requestIncomplete();
                     }
                 }
     };
@@ -1022,6 +1035,8 @@ base.retrieve = function(agi,callback)
 
                     if (received_flag !== null) {
                         self.requestComplete();
+                    } else {
+                        self.requestIncomplete();
                     }
 
                 } else {
