@@ -578,10 +578,15 @@ base.retrieve = function(agi,callback)
                         self.requestComplete();
                         return;
                     }
-                    if (self._dataReceived(data,status)) {
+                    var received_flag = self._dataReceived(data,status);
+
+                    if (received_flag) {
                         self.gotResult();
                     }
-                    self.requestComplete();
+
+                    if (received_flag !== null && typeof received_flag !== 'undefined') {
+                        self.requestComplete();
+                    }
                 }
     };
     MASCP.extend(default_params,request_data);
@@ -664,10 +669,17 @@ base.retrieve = function(agi,callback)
                             cback.call(self);
                         });
                     }
-                    if (self._dataReceived(data,"db")) {
+
+                    var received_flag = self._dataReceived(data,"db");
+
+                    if (received_flag) {
                         self.gotResult();
                     }
-                    self.requestComplete();
+
+                    if (received_flag !== null) {
+                        self.requestComplete();
+                    }
+
                 } else {
                     var old_received = self._dataReceived;
                     self._dataReceived = (function() { return function(dat) {
@@ -1896,7 +1908,7 @@ MASCP.ExomeReader.SERVICE_URL = 'http://localhost:3000/data/latest/gator';
         if (typeof data == "string" && data.match(/^NM/)) {
             this.agi = data.replace(/(\n|\r)+$/,'');
             this.retrieve(this.agi);
-            return false;
+            return;
         }
     };
 })(MASCP.ExomeReader);
@@ -2835,7 +2847,7 @@ MASCP.PhosphatReader.prototype.requestData = function()
                 this.retrieve();
             }
         }
-        return false;
+        return;
     };
     
     // var oldToString = mpr.prototype.toString;
