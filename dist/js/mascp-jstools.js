@@ -8662,6 +8662,7 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
                 jQuery(self._canvas).trigger('_anim_end');
 
                 jQuery(self._canvas).one('zoomChange',function() {
+                    self.refresh();
                     if (typeof center_residue != 'undefined') {
                         var delta = ((start_zoom - zoom_level)/(25))*center_residue;
                         delta += start_x;
@@ -8689,8 +8690,6 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
                     }
                 }
                 jQuery(self).trigger('zoomChange');
-                self.refresh();
-
             };
         
             if (("ontouchend" in document) && self.zoomCenter) {
