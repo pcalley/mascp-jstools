@@ -7338,7 +7338,8 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
     };
     var drawAminoAcids = function() {
         var renderer = this;
-        renderer.addTextTrack(this.sequence,this._canvas.set());
+        var aas = renderer.addTextTrack(this.sequence,this._canvas.set());
+        aas.attr({'y' : 12*renderer._RS});
         renderer.select = function() {
             var vals = Array.prototype.slice.call(arguments);
             var from = vals[0];
@@ -8035,7 +8036,7 @@ MASCP.CondensedSequenceRenderer.prototype.addTextTrack = function(seq,container)
             a_text.style.fontFamily = "'Lucida Console', Monaco, monospace";
             x += 1;
         }
-        amino_acids.attr( { 'y':-1000,'width': RS,'text-anchor':'start','height': RS,'font-size':RS,'fill':'#000000'});
+        amino_acids.attr( { 'width': RS,'text-anchor':'start','height': RS,'font-size':RS,'fill':'#000000'});
     }
     var update_sequence = function() {
         if (seq.length <= 1500) {
@@ -8079,6 +8080,7 @@ MASCP.CondensedSequenceRenderer.prototype.addTextTrack = function(seq,container)
        }
    },false);
 
+   return amino_acids;
 };
 
 MASCP.CondensedSequenceRenderer.prototype.renderTextTrack = function(lay,in_text) {
