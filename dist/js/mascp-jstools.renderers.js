@@ -3459,7 +3459,11 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
             if (! self._canvas) {
                 return;
             }
+
+            var no_touch_center = false;
+
             if (self.zoomCenter == 'center') {
+                no_touch_center = true;
                 self.zoomCenter = {'x' : self._RS*(self.leftVisibleResidue()+0.5*(self.rightVisibleResidue() - self.leftVisibleResidue())) };
             }
             
@@ -3544,7 +3548,7 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
                 jQuery(self).trigger('zoomChange');
             };
         
-            if (("ontouchend" in document) && self.zoomCenter) {
+            if (("ontouchend" in document) && self.zoomCenter && ! no_touch_center ) {
                 jQuery(self).unbind('gestureend');
                 jQuery(self).one('gestureend',end_function);
                 timeout = 1;
