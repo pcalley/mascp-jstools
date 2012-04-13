@@ -2474,35 +2474,10 @@ if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
 }
 
 /** Default class constructor
- *  @class      Service class that will retrieve sequence data for a given AGI from a given ecotype
- *  @param      {String} agi            Agi to look up
- *  @param      {String} endpointURL    Endpoint URL for this service
- *  @extends    MASCP.Service
  */
 MASCP.GoogledataReader = MASCP.buildService(function(data) {
-                        if ( ! data ) {
-                            return this;
-                        }
-                        this.data = data ? data.data : data;
-                        (function(self) {
-                            self.getPeptides = function() {
-                                return data.data;
-                            };
-                        })(this);
                         return this;
                     });
-
-/* File formats
-
-ATXXXXXX.XX,123-456
-ATXXXXXX.XX,PSDFFDGFDGFDG
-ATXXXXXX.XX,123,456
-
-*/
-
-MASCP.GoogledataReader.prototype.toString = function() {
-    return 'MASCP.GoogledataReader.'+this.datasetname;
-};
 
 (function() {
 
@@ -2557,7 +2532,7 @@ var parsedata = function ( data ){
     /* the content of this function is not important to the question */
     var entryidRC = /.*\/R(\d*)C(\d*)/;
     var retdata = {};
-    retdata.mat = {};
+    retdata.data = [];
     var max_rows = 0;
     for( var l in data.feed.entry )
     {
@@ -2567,19 +2542,29 @@ var parsedata = function ( data ){
         var R,C;
         if( m != null )
         {
-            R = new Number( m[ 1 ] );
-            C = new Number( m[ 2 ] );
+            R = m[ 1 ] - 1;
+            C = m[ 2 ] - 1;
         }
-        var row = retdata.mat[ R ];                                                                                                                           
+        var row = retdata.data[ R ];                                                                                                                           
         if( typeof( row ) == 'undefined' ) {
-            retdata.mat[ R ] = {};
+            retdata.data[ R ] = [];
         }
-        retdata.mat[ R ][ C ] = entry.content.$t;
-        if (R > max_rows) { 
-            max_rows = R;
-        }
+        retdata.data[ R ][ C ] = entry.content.$t;
     }
-    retdata.max_rows = max_rows;
+    retdata.retrieved = new Date(data.feed.updated.$t);
+    
+    /* When we cache this data, we don't want to
+       wipe out the hour/minute/second accuracy so
+       that we can eventually do some clever updating
+       on this data.
+     */
+    retdata.retrieved.setUTCHours = function(){};
+    retdata.retrieved.setUTCMinutes = function(){};
+    retdata.retrieved.setUTCSeconds = function(){};
+    retdata.retrieved.setUTCMilliseconds = function(){};
+    retdata.etag = data.feed.gd$etag;
+    retdata.title = data.feed.title.$t;
+
     return retdata;                                                                       
 };
 
@@ -2602,7 +2587,7 @@ var get_document_using_script = function(doc_id,callback) {
     head.appendChild(script);
 }
 
-var get_document = function(doc,callback) {
+var get_document = function(doc,etag,callback) {
     if ( ! doc.match(/^spreadsheet/ ) ) {
         console.log("No support for retrieving things that aren't spreadsheets yet");
         return;
@@ -2615,9 +2600,14 @@ var get_document = function(doc,callback) {
             authenticate();
             var feedUrl = "https://spreadsheets.google.com/feeds/cells/"+doc_id+"/1/private/basic";
             var service = new google.gdata.client.GoogleService('wise','gator');
+            var headers_block = {'GData-Version':'2.0'};
+            if (etag) {
+                headers_block["If-None-Match"] = etag;
+            }
+            service.setHeaders(headers_block);
             service.getFeed(feedUrl,function(data) {
                 callback.call(null,null,parsedata(data));
-            },callback);
+            },callback,google.gdata.Feed);
         } else {
             callback.call(null,null,dat);
         }
@@ -2628,7 +2618,87 @@ var get_document = function(doc,callback) {
 MASCP.GoogledataReader.prototype.getDocumentList = documents;
 
 MASCP.GoogledataReader.prototype.getDocument = get_document;
+/*
+map = {
+    "peptides" : "column_a",
+    "sites"    : "column_b",
+    "id"       : "uniprot_id"
+}
+*/
+MASCP.GoogledataReader.prototype.createReader = function(doc, map) {
+    var self = this;
+    var reader = new MASCP.UserdataReader();
+    reader.datasetname = doc;
 
+    (function() {
+        var a_temp_reader = new MASCP.UserdataReader();
+        a_temp_reader.datasetname = doc;
+        MASCP.Service.CacheService(a_temp_reader);
+        MASCP.Service.CachedAgis(a_temp_reader,function(accs) {
+            if ( accs.length < 1 ) {
+                get_data(null);
+                return;
+            }
+            a_temp_reader.retrieve(accs[0],function() {
+                get_data(this.result._raw_data.etag);
+            });
+        });
+    })();
+
+    var get_data = function(etag) {
+        self.getDocument(doc,etag,function(e,data) {
+            if (e) {
+                if (e.cause.status == 304) {
+                    // We don't do anything - the cached data is fine.
+                    console.log("Matching e-tag");
+                    bean.fire(reader,'ready');
+                    return;
+                }
+                reader.retrieve = null;
+                bean.fire(reader,"error",[e]);
+                return;
+            }
+
+            // Clear out the cache since we have new data coming in
+            console.log("Wiping out data");
+            MASCP.Service.ClearCache(reader);
+
+            var headers = data.data.shift();
+            var dataset = {};
+            var id_col = headers.indexOf(map.id);
+            var databits = data.data;
+            var cols_to_add = [];
+            for (var col in map) {
+                if (col == "id") {
+                    continue;
+                }
+                if (map.hasOwnProperty(col)) {
+                    cols_to_add.push({ "name" : col, "index" : headers.indexOf(map[col]) });
+                }
+            }
+            while (databits.length > 0) {
+                var row = databits.shift();
+                var id = row[id_col].toLowerCase();
+                if ( ! dataset[id] ) {
+                    dataset[id] = {};
+                }
+                var obj = dataset[id];
+                var i;
+                for (i = cols_to_add.length - 1; i >= 0; i--) {
+                    if ( ! obj[cols_to_add[i].name] ) {
+                        obj[cols_to_add[i].name] = [];
+                    }
+                    obj[cols_to_add[i].name] = obj[cols_to_add[i].name].concat((row[cols_to_add[i].index] || '').split(','));
+                }
+                obj.retrieved = data.retrieved;
+                obj.title = data.title;
+                obj.etag = data.etag;
+            }
+            reader.setData(doc,dataset);
+        });
+    }
+    return reader;
+};
 
 })();
 
@@ -4872,22 +4942,9 @@ MASCP.UserdataReader = MASCP.buildService(function(data) {
                         if ( ! data ) {
                             return this;
                         }
-                        this.data = data ? data.data : data;
-                        (function(self) {
-                            self.getPeptides = function() {
-                                return data.data;
-                            };
-                        })(this);
+                        this._raw_data = data;
                         return this;
                     });
-
-/* File formats
-
-ATXXXXXX.XX,123-456
-ATXXXXXX.XX,PSDFFDGFDGFDG
-ATXXXXXX.XX,123,456
-
-*/
 
 MASCP.UserdataReader.prototype.toString = function() {
     return 'MASCP.UserdataReader.'+this.datasetname;
@@ -5024,6 +5081,10 @@ MASCP.UserdataReader.prototype.setData = function(name,data) {
 
     var self = this;
     
+    // Call CacheService on this object/class
+    // just to make sure that it has access
+    // to the cache retrieval mechanisms
+
     MASCP.Service.CacheService(this);
     
     this.datasetname = name;
@@ -5033,35 +5094,41 @@ MASCP.UserdataReader.prototype.setData = function(name,data) {
     inserter.datasetname = name;
     inserter.data = data;
     
-    inserter.retrieve = function(agi,cback) {
-        this.agi = agi;
-        this._dataReceived(find_peptide_cols(filter_agis(this.data,this.agi)));
+    inserter.retrieve = function(an_acc,cback) {
+        this.agi = an_acc;
+        this._dataReceived(data[this.agi]);
         cback.call(this);
     };
     
     MASCP.Service.CacheService(inserter);
-    
-    var agis = filter_agis(data);
+
+    var accs = [];
+    var acc;
+    for (acc in data) {
+        if (data.hasOwnProperty(acc)) {
+            accs.push(acc);
+        }
+    }
 
     var retrieve = this.retrieve;
 
-    this.retrieve = function(agi,cback) {
+    this.retrieve = function(id,cback) {
         console.log("Data not ready! Waiting for ready state");
         var self = this;        
         bean.add(self,'ready',function() {
             bend.remove(self,'ready',arguments.callee);
-            self.retrieve(agi,cback);
+            self.retrieve(id,cback);
         });
     };
 
     (function() {
-        if (agis.length === 0) {
+        if (accs.length === 0) {
             self.retrieve = retrieve;
             bean.fire(self,'ready');
             return;
         }
-        var agi = agis.shift();     
-        inserter.retrieve(agi,arguments.callee);
+        var acc = accs.shift();     
+        inserter.retrieve(acc,arguments.callee);
     })();
 
 };
