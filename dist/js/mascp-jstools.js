@@ -1017,10 +1017,13 @@ base.retrieve = function(agi,callback)
                 if (data) {
                     if (cback) {
                         self.result = null;
-                        bean.add(self,"resultReceived",function() {
-                            bean.remove(self,"resultReceived",arguments.callee);
-                            cback.call(self);
-                        });
+                        var done_func = function(err) {
+                            bean.remove(self,"resultRecieved",arguments.callee);
+                            bean.remove(self,"error",arguments.callee);
+                            cback.call(self,err);
+                        };
+                        bean.add(self,"resultReceived",done_func);
+                        bean.add(self,"error", done_func);
                     }
 
                     var received_flag = self._dataReceived(data,"db");
@@ -5348,7 +5351,7 @@ MASCP.ClustalRunner.Result.prototype.alignToSequence = function(seq_index) {
 })();
 
 MASCP.ClustalRunner.Result.prototype.getSequences = function() {
-    if (this._raw_data.data.sequences) {
+    if (this._raw_data && this._raw_data.data && this._raw_data.data.sequences) {
         return [].concat(this._raw_data.data.sequences);
     }
     var bits = this._raw_data.match(/seq\d+(.*)/g);
@@ -5364,7 +5367,7 @@ MASCP.ClustalRunner.Result.prototype.getSequences = function() {
 };
 
 MASCP.ClustalRunner.Result.prototype.getAlignment = function() {
-    if (this._raw_data.data.alignment) {
+    if (this._raw_data && this._raw_data.data && this._raw_data.data.alignment) {
         return this._raw_data.data.alignment.toString();
     }
     this._text_data = this._raw_data;
