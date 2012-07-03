@@ -7259,21 +7259,6 @@ var SVGCanvas = SVGCanvas || (function() {
           return a_rect;
         };
 
-        canvas.popup = function(x,y,width,height) {
-          var a_popup = document.createElementNS(svgns,'rect');
-          a_popup.setAttribute('x', typeof x == 'string' ? x : x * RS);
-          a_popup.setAttribute('y', typeof y == 'string' ? y : y * RS);
-          a_popup.setAttribute('width', typeof width == 'string' ? width : width * RS);
-          a_popup.setAttribute('height', typeof height == 'string' ? height : height * RS);
-          a_popup.setAttribute('stroke','#000000');
-
-          a_popup.disappear = function() { this.removeChild(a_popup); };
-
-    //      a_popup.setAttribute('shape-rendering','optimizeSpeed');
-          this.appendChild(a_popup);
-          return a_popup;
-        };
-
         canvas.use = function(ref,x,y,width,height) {
             var a_use = document.createElementNS(svgns,'use');
             a_use.setAttribute('x', typeof x == 'string' ? x : x * RS);
@@ -8371,19 +8356,6 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     rect.setAttribute('visibility', 'hidden');
     rect.style.opacity = fraction;
     rect.setAttribute('fill',MASCP.layers[layerName].color);
-    
-    rect.mouseOver = function(setting) {
-        if (setting == 'on') {
-            rect.timerID = setTimeout( function() { rect.popup = canvas.popup(rect.getAttribute('x'), rect.getAttribute('y'), 8, 8); }, 1500);
-        }
-        if (setting == 'off') {
-            clearTimeout(rect.timerID);
-            rect.popup.disappear();
-        }
-    };
-
-    jQuery(rect).bind('mouseenter', function() { this.mouseOver('on'); });
-    jQuery(rect).bind('mouseleave', function() { this.mouseOver('off'); });
     rect.position_start = this._index;
     rect.position_end = this._index + width;
     return rect;
