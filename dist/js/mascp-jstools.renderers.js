@@ -1475,10 +1475,7 @@ var SVGCanvas = SVGCanvas || (function() {
         var curr_scale = scale_re.exec(curr_transform);
     
         var curr_height = parseFloat(this.getAttribute('height') || 1);
-        console.log("curr height is "+curr_height);
-        console.log("target height is "+height);
-        console.log("current scale is "+curr_scale[1]);
-        console.log(curr_transform);
+
         var new_scale = 1;
         if (curr_scale === null) {
             curr_transform += ' scale(1) ';
@@ -1487,8 +1484,8 @@ var SVGCanvas = SVGCanvas || (function() {
             curr_scale = parseFloat(curr_scale[1]);
         }
         new_scale = ( parseFloat(height) / curr_height ) * curr_scale;
+
         curr_transform = curr_transform.replace(scale_re,'scale('+new_scale+')');
-        console.log(curr_transform);
 
         this.setAttribute('transform',curr_transform);
         this.setAttribute('height',height);
@@ -3129,7 +3126,7 @@ MASCP.CondensedSequenceRenderer.prototype.redrawAnnotations = function(layerName
         // Convert the template into pure JavaScript
         str
           .replace(/[\r\t\n]/g, " ")
-          .split("<%").join("\t")
+          .split(/\x3c\%/g).join("\t")
           .replace(/((^|%>)[^\t]*)'/g, "$1\r")
           .replace(/\t=(.*?)%>/g, "',$1,'")
           .split("\t").join("');")
