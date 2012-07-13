@@ -7164,7 +7164,7 @@ var SVGCanvas = SVGCanvas || (function() {
     };
 
     return (function(canvas) {
-        
+
         var RS = canvas.RS || DEFAULT_RS;
         canvas.RS = RS;
         
@@ -7248,31 +7248,61 @@ var SVGCanvas = SVGCanvas || (function() {
         };
 
         canvas.rect = function(x,y,width,height) {
-          var a_rect = document.createElementNS(svgns,'rect');
-          a_rect.setAttribute('x', typeof x == 'string' ? x : x * RS);
-          a_rect.setAttribute('y', typeof y == 'string' ? y : y * RS);
-          a_rect.setAttribute('width', typeof width == 'string' ? width : width * RS);
-          a_rect.setAttribute('height', typeof height == 'string' ? height : height * RS);
-          a_rect.setAttribute('stroke','#000000');
+            var a_rect = document.createElementNS(svgns,'rect');
+            a_rect.setAttribute('x', typeof x == 'string' ? x : x * RS);
+            a_rect.setAttribute('y', typeof y == 'string' ? y : y * RS);
+            a_rect.setAttribute('width', typeof width == 'string' ? width : width * RS);
+            a_rect.setAttribute('height', typeof height == 'string' ? height : height * RS);
+            a_rect.setAttribute('stroke','#000000');
     //      a_rect.setAttribute('shape-rendering','optimizeSpeed');
-          this.appendChild(a_rect);
-          return a_rect;
+            this.appendChild(a_rect);
+            return a_rect;
         };
 
-        canvas.popup = function(x,y,width,height) {
-          var a_popup = document.createElementNS(svgns,'rect');
-          a_popup.setAttribute('x', typeof x == 'string' ? x : x * RS);
-          a_popup.setAttribute('y', typeof y == 'string' ? y : y * RS);
-          a_popup.setAttribute('width', typeof width == 'string' ? width : width * RS);
-          a_popup.setAttribute('height', typeof height == 'string' ? height : height * RS);
-          a_popup.setAttribute('stroke','#000000');
-
-          a_popup.disappear = function() { this.removeChild(a_popup); };
-
-    //      a_popup.setAttribute('shape-rendering','optimizeSpeed');
-          this.appendChild(a_popup);
-          return a_popup;
+        canvas.popup = function(mouseX,mouseY,clientX,zoom) {
+            // Set offset of popup from current mouse cursor location
+            var offsetY = -4000;
+            if ( clientX >= window.innerWidth / 2 ) {
+                var offsetX = -7000;
+                var polyOffsetX = -1000;
+            }
+            else {
+                var offsetX = 1000;
+                var polyOffsetX = 1000;
+            }
+            // Create container for popup
+            var a_popup = document.createElementNS(svgns,'g');
+            a_popup.setAttribute('id','popup');
+            // Create main popup body
+            var popup_rect = document.createElementNS(svgns, 'rect');
+            popup_rect.setAttribute('x', mouseX+offsetX/zoom);
+            popup_rect.setAttribute('y', mouseY+offsetY/zoom);
+            popup_rect.setAttribute('width', 6000/zoom);
+            popup_rect.setAttribute('height', 4000/zoom);
+            popup_rect.setAttribute('rx', 300/zoom);
+            popup_rect.setAttribute('ry', 300/zoom);
+            popup_rect.setAttribute('stroke','#000000');
+            popup_rect.setAttribute('stroke-width',30/zoom);
+            popup_rect.setAttribute('fill','#ffffff');
+            a_popup.appendChild(popup_rect);
+            // Create arrow from mouse location to popup body
+            var popup_poly = document.createElementNS(svgns, 'polygon');
+            var polyX = (mouseX+(polyOffsetX/zoom))
+            popup_poly.setAttribute('points',mouseX+','+(mouseY-(3300/zoom))+' '+polyX+','+(mouseY-(3500/zoom))+' '+polyX+','+(mouseY-(3100/zoom)));
+            popup_poly.setAttribute('stroke','#000000');
+            popup_poly.setAttribute('stroke-width',30/zoom);
+            popup_poly.setAttribute('fill','#ffffff');
+            a_popup.appendChild(popup_poly);
+            // Cover up black line at intersection of popup_rect and popup_poly
+            var popup_line = document.createElementNS(svgns, 'polyline');
+            popup_line.setAttribute('points',(polyX-(2/zoom))+','+(mouseY-(3480/zoom))+' '+(polyX-(2/zoom))+','+(mouseY-(3100/zoom)));
+            popup_line.setAttribute('stroke','#ffffff');
+            popup_line.setAttribute('stroke-width',60/zoom);
+            a_popup.appendChild(popup_line);
+            this.appendChild(a_popup);
+            return a_popup;
         };
+
 
         canvas.use = function(ref,x,y,width,height) {
             var a_use = document.createElementNS(svgns,'use');
@@ -7844,7 +7874,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
 
 
 
-           canv.setCurrentTranslateXY = function(x,y) {
+            canv.setCurrentTranslateXY = function(x,y) {
                     var curr_transform = (group.getAttribute('transform') || '').replace(/translate\([^\)]+\)/,'');
                     curr_transform = curr_transform + ' translate('+x+', '+y+') ';
                     group.setAttribute('transform',curr_transform);
@@ -7883,15 +7913,47 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
             container_canv.setAttribute('width','100%');
             container_canv.setAttribute('height','100%');
             canv.appendChild(canv.makeEl('rect', {'x':0,'y':0,'width':'100%','height':'100%','stroke-width':'0','fill':'#ffffff'}));
+            
             renderer._object = this;
             renderer._canvas = canv;
             renderer._canvas._canvas_height = 0;
+            
+            // Track and store mouse cursor position in SVG canvas coordinates for the hover popup event
+            document.documentElement.addEventListener('mousemove',function(evt) {
+                // Here we address browser cross-compatibility issues
+                var posx = 0;
+                var posy = 0;
+                if (!evt) var evt = window.event;
+                if (evt.pageX || evt.pageY) 	{
+                    posx = evt.pageX;
+                    posy = evt.pageY;
+                }
+                else if (evt.clientX || evt.clientY) 	{
+                    posx = evt.clientX + document.body.scrollLeft
+                        + document.documentElement.scrollLeft;
+                    posy = evt.clientY + document.body.scrollTop
+                        + document.documentElement.scrollTop;
+                }
+                // Now posx and posy contain the mouse position relative to the document
+
+                // Create an SVGPoint object and transform its coordinates
+                var pt = canv.createSVGPoint();
+                pt.x = posx;
+                pt.y = posy;
+                
+                canv.cursorPos = pt;
+                
+                // Determine quadrant of mouse cursor and set popup offset accordingly
+                canv.clientX = evt.clientX;
+                
+            }, false);
+ 
             jQuery(renderer).trigger('svgready');
         },false);
-    
+     
         return canvas;
     };
-
+    
     var addNav = function(nav_canvas) {
         this.navigation = new MASCP.CondensedSequenceRenderer.Navigation(nav_canvas,this);
         var nav = this.navigation;
@@ -8174,7 +8236,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
         });
     
         var canvas = createCanvasObject.call(this);
-    
+ 
         if (this._canvas) {
             has_canvas = true;
         } else {
@@ -8371,19 +8433,38 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     rect.setAttribute('visibility', 'hidden');
     rect.style.opacity = fraction;
     rect.setAttribute('fill',MASCP.layers[layerName].color);
-    
-    rect.mouseOver = function(setting) {
+
+    // Function for mouseover events on peptide objects, aka BoxOverlays, to trigger hover popup
+    var popup = null;
+    var mouseOver = function(setting) {
         if (setting == 'on') {
-            rect.timerID = setTimeout( function() { rect.popup = canvas.popup(rect.getAttribute('x'), rect.getAttribute('y'), 8, 8); }, 1500);
+            rect.parentNode.timerID = setTimeout( function() {
+                zoom = jQuery(MASCP.renderer.zoom)[0];
+                // Transform mouse cursor location to SVG canvas coordinates
+                canvas.cursorPos = canvas.cursorPos.matrixTransform(canvas.getCTM().inverse());
+                // Create popup
+                popup = canvas.popup(canvas.cursorPos.x, canvas.cursorPos.y, canvas.clientX, zoom);
+                jQuery(popup).bind('mouseenter', function() { canvas.withinPopup = true; });
+                jQuery(popup).bind('mouseleave', function() {
+                    canvas.withinPopup = false;
+                    mouseOver('off');
+                });
+            }, 500);
         }
         if (setting == 'off') {
-            clearTimeout(rect.timerID);
-            rect.popup.disappear();
+            clearTimeout(rect.parentNode.timerID);
+            setTimeout( function() {
+                // Test for presence of popup and mouseover in the popup itself before removing
+                if ('popup' in rect.parentNode.childNodes && ! canvas.withinPopup === true) { rect.parentNode.removeChild(popup); }
+            }, 20);
         }
+        if (popup) { return popup; }
+        else { return; }
     };
+    // Bind mouseOver function to peptide objects
+    jQuery(rect).bind('mouseenter', function() { popup = mouseOver('on'); });
+    jQuery(rect).bind('mouseleave', function() { mouseOver('off'); });
 
-    jQuery(rect).bind('mouseenter', function() { this.mouseOver('on'); });
-    jQuery(rect).bind('mouseleave', function() { this.mouseOver('off'); });
     rect.position_start = this._index;
     rect.position_end = this._index + width;
     return rect;
@@ -12188,7 +12269,7 @@ GOMap.Diagram.addZoomControls = function(zoomElement,min,max,precision,value) {
     min = min || 0;
     max = max || 10;
     precision = precision || 0.5;
-    value = value || zoomElement.zoom || min; 
+    value = value || zoomElement.zoom || min;
     
     var controls_container = document.createElement('div');
     
@@ -12202,7 +12283,7 @@ GOMap.Diagram.addZoomControls = function(zoomElement,min,max,precision,value) {
     reset.setAttribute('type','button');
     reset.setAttribute('value','Reset');
 
-    controls_container.appendChild(reset);    
+    controls_container.appendChild(reset);
 
     reset.addEventListener('click',function() {
         zoomElement.zoom = zoomElement.defaultZoom || value;
@@ -12212,7 +12293,7 @@ GOMap.Diagram.addZoomControls = function(zoomElement,min,max,precision,value) {
     range.setAttribute('min',min);
     range.setAttribute('max',max);
     range.setAttribute('step',precision);
-    range.setAttribute('value',value); 
+    range.setAttribute('value',value);
     range.setAttribute('type','range');
     range.setAttribute('style','-webkit-appearance: slider-horizontal; width: 100%; position: absolute; top: 0px; bottom: 0px; margin-top: 0.5em; left: 100%; margin-left: -0.5em;');
 
