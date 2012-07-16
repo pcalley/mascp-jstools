@@ -7258,6 +7258,7 @@ var SVGCanvas = SVGCanvas || (function() {
             this.appendChild(a_rect);
             return a_rect;
         };
+<<<<<<< HEAD
         
         // Popup object to be attached to hover events on peptide objects (aka BoxOverlays)
         canvas.popup = function(mouseX,mouseY,clientX,metadata) {
@@ -7344,6 +7345,8 @@ var SVGCanvas = SVGCanvas || (function() {
             return a_popup;
         };
 
+=======
+>>>>>>> develop
 
         canvas.use = function(ref,x,y,width,height) {
             var a_use = document.createElementNS(svgns,'use');
@@ -8511,6 +8514,7 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     rect.setAttribute('visibility', 'hidden');
     rect.style.opacity = fraction;
     rect.setAttribute('fill',MASCP.layers[layerName].color);
+<<<<<<< HEAD
 
     // Bind mouseOver function to peptide objects
     peptideSequence = this._renderer.sequence.slice(this._index, this._index+width);
@@ -8518,6 +8522,8 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     bean.add(rect, 'mouseenter', function() { mouseOver('on', rect, canvas, metadata); });
     bean.add(rect, 'mouseleave', function() { mouseOver('off', rect, canvas, metadata); });
 
+=======
+>>>>>>> develop
     rect.position_start = this._index;
     rect.position_end = this._index + width;
     return rect;
