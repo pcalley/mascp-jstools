@@ -7260,16 +7260,16 @@ var SVGCanvas = SVGCanvas || (function() {
         };
         
         // Popup object to be attached to hover events on peptide objects (aka BoxOverlays)
-        canvas.popup = function(mouseX,mouseY,clientX,zoom,metadata) {
+        canvas.popup = function(mouseX,mouseY,clientX,metadata) {
             // Set offset of popup from current mouse cursor location
             var offsetY = -250;
             if ( clientX >= window.innerWidth / 2 ) {
-                var offsetX = -500;
-                var polyOffsetX = -100;
+                var offsetX = -460;
+                var polyOffsetX = offsetX + 400;
             }
             else {
-                var offsetX = 100;
-                var polyOffsetX = 100;
+                var offsetX = 60;
+                var polyOffsetX = offsetX;
             }
             // Create container for popup
             var a_popup = document.createElementNS(svgns,'g');
@@ -8430,6 +8430,34 @@ var addElementToLayer = function(layerName) {
     return [tracer,tracer_marker,bobble];
 };
 
+// Function for mouseover events on peptide objects, aka BoxOverlays, to trigger hover popup
+var mouseOver = function(setting, target, canvas, metadata) {
+    if (setting == 'on') {
+        target.timerID = setTimeout( function() {
+            // Transform mouse cursor location to SVG canvas coordinates
+            canvas.cursorPos = canvas.cursorPos.matrixTransform(canvas.parentNode.getCTM().inverse());
+            // Create popup
+            target.popup = canvas.popup(canvas.cursorPos.x, canvas.cursorPos.y, canvas.clientX, metadata);
+            bean.add(target.popup, 'mouseenter', function() { canvas.withinPopup = true; });
+            bean.add(target.popup, 'mouseleave', function() {
+                canvas.withinPopup = false;
+                setTimeout( function() {
+                    // Test for presence of popup and mouseover in the popup itself before removing
+                    if ('popup' in canvas.parentNode.childNodes && ! canvas.withinPopup === true) { canvas.parentNode.removeChild(target.popup); }
+                }, 20); 
+            });
+        }, 500);
+    }
+    if (setting == 'off') {
+        if (target.timerID) { clearTimeout(target.timerID); }
+        // Test for presence of a popup and a mouseover event in the popup itself before removing
+        setTimeout( function() {
+            if ('popup' in canvas.parentNode.childNodes && ! canvas.withinPopup === true) { canvas.parentNode.removeChild(target.popup); }
+        }, 20);
+    }
+    return;
+};
+
 var addBoxOverlayToElement = function(layerName,width,fraction) {
     
     if (typeof fraction == 'undefined') {
@@ -8448,11 +8476,16 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
         log("Delaying rendering, waiting for sequence change");
         return;
     }
-
+    
+    var peptideSequence = '';
+    var metadata = '';
     var rect = canvas.rect(-0.25+this._index,60,width || 1,4);
     var rect_x = parseFloat(rect.getAttribute('x'));
     var rect_max_x = rect_x + parseFloat(rect.getAttribute('width'));
     var container = this._renderer._layer_containers[layerName];
+    
+
+    // Loop through rect objects already in layer; if current peptide overlaps, combine
     for (var i = 0; i < container.length; i++) {
         var el_x = parseFloat(container[i].getAttribute('x'));
         var el_max_x = el_x + parseFloat(container[i].getAttribute('width'));
@@ -8463,49 +8496,27 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
                 }
                 container[i].setAttribute('x', ""+Math.min(el_x,rect_x));
                 container[i].setAttribute('width', ""+(Math.max(el_max_x,rect_max_x)-Math.min(el_x,rect_x)) );
+                peptideSequence = this._renderer.sequence.slice(Math.min(container[i].position_start,this._index), Math.max(container[i].position_end,this._index+width));
+                metadata = 'Sequence:' + peptideSequence;
+                bean.remove(container[i], 'mouseenter');
+                bean.add(container[i], 'mouseenter', function() { mouseOver('on', container[i], canvas, metadata); });
                 rect.parentNode.removeChild(rect);
                 return container[i];
             }
     }
+
     this._renderer._layer_containers[layerName].push(rect);
     rect.setAttribute('class',layerName);
     rect.style.strokeWidth = '0px';
     rect.setAttribute('visibility', 'hidden');
     rect.style.opacity = fraction;
     rect.setAttribute('fill',MASCP.layers[layerName].color);
-    var peptideSequence = this._renderer.sequence.slice(this._index, this._index+width);
-    var metadata = 'Sequence:' + peptideSequence;
 
-    // Function for mouseover events on peptide objects, aka BoxOverlays, to trigger hover popup
-    var popup = null;
-    var mouseOver = function(setting) {
-        if (setting == 'on') {
-            rect.parentNode.timerID = setTimeout( function() {
-                zoom = jQuery(MASCP.renderer.zoom)[0];
-                // Transform mouse cursor location to SVG canvas coordinates
-                canvas.cursorPos = canvas.cursorPos.matrixTransform(canvas.parentNode.getCTM().inverse());
-                // Create popup
-                popup = canvas.popup(canvas.cursorPos.x, canvas.cursorPos.y, canvas.clientX, zoom, metadata);
-                bean.add(popup, 'mouseenter', function() { canvas.withinPopup = true; });
-                bean.add(popup, 'mouseleave', function() {
-                    canvas.withinPopup = false;
-                    mouseOver('off');
-                });
-            }, 500);
-        }
-        if (setting == 'off') {
-            clearTimeout(rect.parentNode.timerID);
-            setTimeout( function() {
-                // Test for presence of popup and mouseover in the popup itself before removing
-                if ('popup' in canvas.parentNode.childNodes && ! canvas.withinPopup === true) { canvas.parentNode.removeChild(popup); }
-            }, 20);
-        }
-        if (popup) { return popup; }
-        else { return; }
-    };
     // Bind mouseOver function to peptide objects
-    bean.add(rect, 'mouseenter', function() { popup = mouseOver('on'); });
-    bean.add(rect, 'mouseleave', function() { mouseOver('off'); });
+    peptideSequence = this._renderer.sequence.slice(this._index, this._index+width);
+    metadata = 'Sequence:' + peptideSequence;
+    bean.add(rect, 'mouseenter', function() { mouseOver('on', rect, canvas, metadata); });
+    bean.add(rect, 'mouseleave', function() { mouseOver('off', rect, canvas, metadata); });
 
     rect.position_start = this._index;
     rect.position_end = this._index + width;
