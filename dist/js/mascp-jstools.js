@@ -2225,9 +2225,6 @@ MASCP.AtPeptideReader.Result.prototype.render = function()
     } else {
         return null;
     }
-<<<<<<< HEAD
-};/** @fileOverview   Classes for reading data from the GelMap database
-=======
 };/*
 http://uniprot.org/mapping/?from=ACC+ID&to=REFSEQ_NT_ID&format=list&query=Q9UNA3
  */
@@ -2349,7 +2346,6 @@ MASCP.ExomeReader.prototype.setupSequenceRenderer = function(renderer) {
  });
 };
 /** @fileOverview   Classes for reading data from the AtPeptide database
->>>>>>> remotes/greg/hover-feature
  */
 if ( typeof MASCP === 'undefined' || typeof MASCP.Service === 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
