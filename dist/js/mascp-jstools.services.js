@@ -295,6 +295,13 @@ MASCP.Service.prototype.requestComplete = function()
     bean.fire(MASCP.Service,'requestComplete',[this]);
 };
 
+MASCP.Service.prototype.requestIncomplete = function()
+{
+    bean.fire(this,'requestIncomplete');
+    bean.fire(MASCP.Service,'requestIncomplete',[this]);
+};
+
+
 MASCP.Service.registeredLayers = function(service) {
     var result = [];
     for (var layname in MASCP.layers) {
@@ -410,8 +417,17 @@ var do_request = function(request_data) {
         request.setRequestHeader('User-Agent',request.customUA);
     }
     
+    var redirect_counts = 5;
+
     request.onreadystatechange = function(evt) {
         if (request.readyState == 4) {
+            if (request.status >= 300 && request.status < 400 && redirect_counts > 0) {
+                var loc = (request.getResponseHeader('location')).replace(/location:\s+/,'');
+                redirect_counts = redirect_counts - 1;
+                request.open('GET',loc,request_data.async);
+                request.send();
+                return;
+            }
             if (request.status == 200) {
                 var data_block;
                 if (request_data.dataType == 'xml') {
@@ -421,7 +437,8 @@ var do_request = function(request_data) {
                 }
                 try {
                     var text = request.responseText;
-                    data_block = request_data.dataType == 'xml' ? request.responseXML || MASCP.importNode(request.responseText) : JSON.parse(request.responseText);
+                    data_block = request_data.dataType == 'xml' ? request.responseXML || MASCP.importNode(request.responseText) :
+                                 request_data.dataType == 'txt' ? request.responseText : JSON.parse(request.responseText);
                 } catch (e) {
                     if (e.type == 'unexpected_eos') {
                         request_data.success.call(null,{},request.status,request);
@@ -521,6 +538,9 @@ base.retrieve = function(agi,callback)
 
     if (agi && callback) {
         this.agi = agi;
+
+        this.result = null;
+        
         var done_result = false;
         var done_func = function(err) {
             bean.remove(self,"resultReceived",done_func);
@@ -565,10 +585,17 @@ base.retrieve = function(agi,callback)
                         self.requestComplete();
                         return;
                     }
-                    if (self._dataReceived(data,status)) {
+                    var received_flag = self._dataReceived(data,status);
+
+                    if (received_flag) {
                         self.gotResult();
                     }
-                    self.requestComplete();
+
+                    if (received_flag !== null && typeof received_flag !== 'undefined') {
+                        self.requestComplete();
+                    } else {
+                        self.requestIncomplete();
+                    }
                 }
     };
     MASCP.extend(default_params,request_data);
@@ -645,15 +672,28 @@ base.retrieve = function(agi,callback)
             get_db_data(id,self.toString(),function(err,data) {
                 if (data) {
                     if (cback) {
-                        bean.add(self,"resultReceived",function() {
-                            bean.remove(self,"resultReceived",arguments.callee);
-                            cback.call(self);
-                        });
+                        self.result = null;
+                        var done_func = function(err) {
+                            bean.remove(self,"resultRecieved",arguments.callee);
+                            bean.remove(self,"error",arguments.callee);
+                            cback.call(self,err);
+                        };
+                        bean.add(self,"resultReceived",done_func);
+                        bean.add(self,"error", done_func);
                     }
-                    if (self._dataReceived(data,"db")) {
+
+                    var received_flag = self._dataReceived(data,"db");
+
+                    if (received_flag) {
                         self.gotResult();
                     }
-                    self.requestComplete();
+
+                    if (received_flag !== null) {
+                        self.requestComplete();
+                    } else {
+                        self.requestIncomplete();
+                    }
+
                 } else {
                     var old_received = self._dataReceived;
                     self._dataReceived = (function() { return function(dat) {
@@ -1840,7 +1880,127 @@ MASCP.AtPeptideReader.Result.prototype.render = function()
     } else {
         return null;
     }
-};/** @fileOverview   Classes for reading data from the AtPeptide database
+};/*
+http://uniprot.org/mapping/?from=ACC+ID&to=REFSEQ_NT_ID&format=list&query=Q9UNA3
+ */
+
+/**
+ * @fileOverview    Classes for reading SNP data
+ */
+
+if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
+
+
+
+/** Default class constructor
+ *  @class      Service class that will retrieve sequence data for a given AGI from a given ecotype
+ *  @param      {String} agi            Agi to look up
+ *  @param      {String} endpointURL    Endpoint URL for this service
+ *  @extends    MASCP.Service
+ */
+MASCP.ExomeReader = MASCP.buildService(function(data) {
+                         this._raw_data = data || {};
+                         return this;
+                     });
+
+MASCP.ExomeReader.SERVICE_URL = 'http://localhost:3000/data/latest/gator';
+
+(function(serv) {
+    var defaultDataReceived = serv.prototype._dataReceived;
+
+    serv.prototype._dataReceived = function(data,status)
+    {
+        if (data === null) {
+            return defaultDataReceived.call(this,null,status);
+        }
+        if (typeof data == "object") {
+            return defaultDataReceived.call(this,data,status);
+        }
+
+        if (typeof data == "string" && data.match(/^NM/)) {
+            this.agi = data.replace(/(\n|\r)+$/,'');
+            this.retrieve(this.agi);
+            return;
+        }
+    };
+})(MASCP.ExomeReader);
+
+MASCP.ExomeReader.prototype.requestData = function()
+{
+    var self = this;
+    var agi = this.agi || '';
+    if (! agi.match(/NM/)) {
+        return {
+            type: "GET",
+            dataType: "txt",
+            url: "http://uniprot.org/mapping/",
+            data : {
+                "from" : "ACC+ID",
+                "to" : "REFSEQ_NT_ID",
+                "format" : "list",
+                "query" : agi
+            }
+        }
+    }
+    return {
+        type: "GET",
+        dataType: "json",
+        data: { 'agi'   : agi,
+                'service' : 'exome'
+        }
+    };
+};
+
+MASCP.ExomeReader.prototype.setupSequenceRenderer = function(renderer) {
+ var reader = this;
+
+ reader.bind('resultReceived', function() {
+     var a_result = reader.result;
+     renderer.withoutRefresh(function() {
+     var insertions_layer;
+
+     var accessions = a_result.getAccessions();
+     while (accessions.length > 0) {
+
+         var acc = accessions.shift();
+         var acc_fullname = acc;
+
+         var diffs = a_result.getSnp(acc);
+
+         if (diffs.length < 1) {
+             continue;
+         }
+
+         var in_layer = 'rnaedit';
+
+         var ins = [];
+         var outs = [];
+         var acc_layer = renderer.registerLayer(in_layer, {'fullname' : 'RNA Edit (mod)' });
+
+         MASCP.getLayer(in_layer).icon = null;
+         var i;
+
+         for (i = diffs.length - 1; i >= 0 ; i-- ){
+             outs.push( { 'index' : diffs[i][0] + 1, 'delta' : diffs[i][1] });
+             ins.push( { 'insertBefore' : diffs[i][0] + 1, 'delta' : diffs[i][2] });
+         }
+
+         for (i = ins.length - 1; i >= 0 ; i-- ) {
+             var pos = ins[i].insertBefore - 1;
+             if (pos > renderer.sequence.length) {
+                 pos = renderer.sequence.length;
+             }
+             renderer.getAA(pos).addAnnotation('rnaedit',1, { 'border' : 'rgb(150,0,0)', 'content' : ins[i].delta, 'angle': 'auto' });
+         }
+     }
+
+     });
+     jQuery(renderer).trigger('resultsRendered',[reader]);
+ });
+};
+/** @fileOverview   Classes for reading data from the AtPeptide database
  */
 if ( typeof MASCP === 'undefined' || typeof MASCP.Service === 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
@@ -1964,6 +2124,271 @@ MASCP.GelMapReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 MASCP.GelMapReader.Result.prototype.render = function()
 {
 };
+/**
+ * @fileOverview    Retrieve data from a Google data source
+ */
+
+if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
+
+/** Default class constructor
+ */
+MASCP.GoogledataReader = MASCP.buildService(function(data) {
+                        return this;
+                    });
+
+(function() {
+
+if ( typeof google == 'undefined' && typeof document !== 'undefined') {
+
+    // You need the scripts attached already. Writing the script tag
+    // doesn't seem to work
+
+    // http://www.google.com/jsapi?autoload=%7B%22modules%22%3A%5B%7B%22name%22%3A%22gdata%22%2C%22version%22%3A%222%22%7D%5D%7D
+    //return;
+    // attach_google_scripts();
+}
+
+var scope = "https://docs.google.com/feeds/ https://spreadsheets.google.com/feeds/";
+
+var authenticate = function() {
+    if (! google.accounts || ! google.accounts.user.checkLogin(scope)=='') {
+        return true;
+    } else {
+        // This kicks you out of the current page.. better way to do this?
+        google.accounts.user.login(scope);
+    }
+    return;
+};
+
+var documents = function(callback) {
+    
+    authenticate();
+
+    var feedUrl = "https://docs.google.com/feeds/documents/private/full";
+    var service = new google.gdata.client.GoogleService('writely','gator');
+    service.getFeed(feedUrl,function(data) {
+        var results = [];
+        if (data) {
+            var entries = data.feed.entry;
+            var i;
+            for ( i = entries.length - 1; i >= 0; i-- ) {
+                results.push( [ entries[i].title.$t,
+                                entries[i]['gd$resourceId'].$t,
+                                new Date(entries[i]['updated'].$t) ]
+                            );
+            }
+        }
+        callback.call(null,null,results);
+    },callback);
+};
+
+var parsedata = function ( data ){
+    /* the content of this function is not important to the question */
+    var entryidRC = /.*\/R(\d*)C(\d*)/;
+    var retdata = {};
+    retdata.data = [];
+    var max_rows = 0;
+    for( var l in data.feed.entry )
+    {
+        var entry = data.feed.entry[ l ];
+        var id = entry.id.$t;
+        var m = entryidRC.exec( id );
+        var R,C;
+        if( m != null )
+        {
+            R = m[ 1 ] - 1;
+            C = m[ 2 ] - 1;
+        }
+        var row = retdata.data[ R ];                                                                                                                           
+        if( typeof( row ) == 'undefined' ) {
+            retdata.data[ R ] = [];
+        }
+        retdata.data[ R ][ C ] = entry.content.$t;
+    }
+    retdata.retrieved = new Date(data.feed.updated.$t);
+    
+    /* When we cache this data, we don't want to
+       wipe out the hour/minute/second accuracy so
+       that we can eventually do some clever updating
+       on this data.
+     */
+    retdata.retrieved.setUTCHours = function(){};
+    retdata.retrieved.setUTCMinutes = function(){};
+    retdata.retrieved.setUTCSeconds = function(){};
+    retdata.retrieved.setUTCMilliseconds = function(){};
+    retdata.etag = data.feed.gd$etag;
+    retdata.title = data.feed.title.$t;
+
+    return retdata;                                                                       
+};
+
+var get_document_using_script = function(doc_id,callback) {
+    var head = document.getElementsByTagName('head')[0];
+    var script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.setAttribute('id','ssheet-'+doc_id);
+    script.src = "http://spreadsheets.google.com/feeds/cells/"+doc_id+"/1/public/basic?alt=json-in-script&callback=gotData";
+    script.addEventListener('error', function() {
+        if (script.parentNode) {
+            script.parentNode.removeChild(script);
+        }
+        callback.call(null,"error",doc_id);
+    });
+    window["cback"+doc_id] = function(dat) {
+        delete window["cback"+doc_id];
+        callback.call(null,null,parsedata(dat));
+    }
+    head.appendChild(script);
+}
+
+var get_document = function(doc,etag,callback) {
+    if ( ! doc.match(/^spreadsheet/ ) ) {
+        console.log("No support for retrieving things that aren't spreadsheets yet");
+        return;
+    }
+    var doc_id = doc.replace(/^spreadsheet:/,'');
+    
+
+    get_document_using_script(doc_id,function(err,dat){
+        if (err) {
+            authenticate();
+            var feedUrl = "https://spreadsheets.google.com/feeds/cells/"+doc_id+"/1/private/basic";
+            var service = new google.gdata.client.GoogleService('wise','gator');
+            var headers_block = {'GData-Version':'2.0'};
+            if (etag) {
+                headers_block["If-None-Match"] = etag;
+            }
+            service.setHeaders(headers_block);
+            service.getFeed(feedUrl,function(data) {
+                callback.call(null,null,parsedata(data));
+            },callback,google.gdata.Feed);
+        } else {
+            callback.call(null,null,dat);
+        }
+    });
+
+};
+
+var render_site = function(renderer) {
+    var self = this;
+    var sites = self.result._raw_data.sites || [], i = 0, match = null;
+    MASCP.registerLayer(self.datasetname,{ 'fullname' : self.result._raw_data.title });
+    for (i = sites.length - 1; i >= 0; i--) {
+        if (match = sites[i].match(/(\d+)/g)) {
+            renderer.getAminoAcidsByPosition([parseInt(match[0])])[0].addToLayer(self.datasetname);
+        }
+    }
+};
+
+var render_peptides = function(renderer) {
+    var self = this;
+    var peptides = self.result._raw_data.peptides || [], i = 0, match = null;
+    MASCP.registerLayer(self.datasetname,{ 'fullname' : self.result._raw_data.title });
+    for (i = peptides.length - 1; i >= 0; i--) {
+        if (match = peptides [i].match(/(\d+)/g)) {
+            renderer.getAminoAcidsByPosition(parseInt(match[0])).addToLayer(self.datasetname);
+        }
+    }
+};
+
+var setup = function(renderer) {
+    this.bind('resultReceived',function(e) {
+        render_peptides.call(this,renderer);
+        render_site.call(this,renderer);
+    });
+};
+
+MASCP.GoogledataReader.prototype.getDocumentList = documents;
+
+MASCP.GoogledataReader.prototype.getDocument = get_document;
+/*
+map = {
+    "peptides" : "column_a",
+    "sites"    : "column_b",
+    "id"       : "uniprot_id"
+}
+*/
+MASCP.GoogledataReader.prototype.createReader = function(doc, map) {
+    var self = this;
+    var reader = new MASCP.UserdataReader();
+    reader.datasetname = doc;
+    reader.setupSequenceRenderer = setup;
+
+    MASCP.Service.CacheService(reader);
+
+    (function() {
+        var a_temp_reader = new MASCP.UserdataReader();
+        a_temp_reader.datasetname = doc;
+        MASCP.Service.CacheService(a_temp_reader);
+        MASCP.Service.CachedAgis(a_temp_reader,function(accs) {
+            if ( accs.length < 1 ) {
+                get_data(null);
+                return;
+            }
+            a_temp_reader.retrieve(accs[0],function() {
+                get_data(this.result._raw_data.etag);
+            });
+        });
+    })();
+
+    var get_data = function(etag) {
+        self.getDocument(doc,etag,function(e,data) {
+            if (e) {
+                if (e.cause.status == 304) {
+                    // We don't do anything - the cached data is fine.
+                    console.log("Matching e-tag");
+                    bean.fire(reader,'ready');
+                    return;
+                }
+                reader.retrieve = null;
+                bean.fire(reader,"error",[e]);
+                return;
+            }
+
+            // Clear out the cache since we have new data coming in
+            console.log("Wiping out data");
+            MASCP.Service.ClearCache(reader);
+
+            var headers = data.data.shift();
+            var dataset = {};
+            var id_col = headers.indexOf(map.id);
+            var databits = data.data;
+            var cols_to_add = [];
+            for (var col in map) {
+                if (col == "id") {
+                    continue;
+                }
+                if (map.hasOwnProperty(col)) {
+                    cols_to_add.push({ "name" : col, "index" : headers.indexOf(map[col]) });
+                }
+            }
+            while (databits.length > 0) {
+                var row = databits.shift();
+                var id = row[id_col].toLowerCase();
+                if ( ! dataset[id] ) {
+                    dataset[id] = {};
+                }
+                var obj = dataset[id];
+                var i;
+                for (i = cols_to_add.length - 1; i >= 0; i--) {
+                    if ( ! obj[cols_to_add[i].name] ) {
+                        obj[cols_to_add[i].name] = [];
+                    }
+                    obj[cols_to_add[i].name] = obj[cols_to_add[i].name].concat((row[cols_to_add[i].index] || '').split(','));
+                }
+                obj.retrieved = data.retrieved;
+                obj.title = data.title;
+                obj.etag = data.etag;
+            }
+            reader.setData(doc,dataset);
+        });
+    }
+    return reader;
+};
+
+})();
 /** @fileOverview   Classes for reading domains from Interpro 
  */
 if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
@@ -2701,7 +3126,7 @@ MASCP.PhosphatReader.prototype.requestData = function()
                 this.retrieve();
             }
         }
-        return false;
+        return;
     };
     
     // var oldToString = mpr.prototype.toString;
@@ -3443,6 +3868,125 @@ if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
 }
 
 /** Default class constructor
+ *  @class      Service class that will retrieve data from Predicted Proteotypic Peptides for a given AGI.
+ *  @param      {String} agi            Agi to look up
+ *  @param      {String} endpointURL    Endpoint URL for this service
+ *  @extends    MASCP.Service
+ */
+MASCP.ProteotypicReader = MASCP.buildService(function(data) {
+                        this._raw_data = data;                        
+                        return this;
+                    });
+
+MASCP.ProteotypicReader.SERVICE_URL = '';
+
+MASCP.ProteotypicReader.prototype.requestData = function()
+{
+    var agi = this.agi;
+    
+    return {
+        type: "GET",
+        dataType: "json",
+        data: { 'agi'       : agi,
+                'service'   : 'proteotypic' 
+        }
+    };
+};
+
+/**
+ *  @class   Container class for results from the Proteotypic service
+ *  @extends MASCP.Service.Result
+ */
+// We need this line for the JsDoc to pick up this class
+MASCP.ProteotypicReader.Result = MASCP.ProteotypicReader.Result;
+
+/** Retrieve the peptides for this particular entry from the Proteotypic service
+ *  @returns Array of peptide strings
+ *  @type [String]
+ */
+MASCP.ProteotypicReader.Result.prototype.getPeptides = function()
+{
+    var content = null;
+
+    if (this._peptides) {
+        return this._peptides;
+    }
+
+    this.spectra = {};
+    this._long_name_map = {};
+    
+    if (! this._raw_data || ! this._raw_data.peptides ) {
+        return [];
+    }
+
+        
+    var peptides = [];
+    var toString = function() {
+        return this.sequence;
+    };
+    
+    for (var i = this._raw_data.peptides.length - 1; i >= 0; i-- ) {
+        var a_peptide = this._raw_data.peptides[i];
+		var the_pep = { 'sequence' : a_peptide.sequence };
+        the_pep.toString = toString;
+        peptides.push(the_pep);
+    }
+    this._peptides = peptides;
+    return peptides;
+};
+
+MASCP.ProteotypicReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
+{
+    var reader = this;
+
+    this.bind('resultReceived', function() {
+
+        MASCP.registerGroup('proteotypic_experimental', {'fullname' : 'Expected Peptides', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
+
+        var overlay_name = 'proteotypic_controller';
+
+        var css_block = '.active .overlay { background: #ff5533; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
+
+        MASCP.registerLayer(overlay_name,{ 'fullname' : 'Expected Peptides', 'color' : '#ff5533', 'css' : css_block });
+
+        if (sequenceRenderer.createGroupController) {
+            sequenceRenderer.createGroupController('proteotypic_controller','proteotypic_experimental');
+        }
+                
+        var peps = this.result.getPeptides();
+		MASCP.registerLayer('proteotypic_peptide_a', { 'fullname': 'Expected Peptides', 'group' : 'proteotypic_experimental', 'color' : '#ff5533', 'css' : css_block });
+		for(var i = 0; i < peps.length; i++) {
+			var peptide = peps[i].sequence;
+			var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide);
+			var layer_name = 'proteotypic_peptide_a';
+			peptide_bits.addToLayer(layer_name);
+			peptide_bits.addToLayer(overlay_name);
+		}
+
+        jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);
+    });
+    return this;
+};
+
+MASCP.ProteotypicReader.Result.prototype.render = function()
+{
+    if (this.getPeptides().length > 0) {
+        var a_container = jQuery('<div>MS/MS spectra <input class="group_toggle" type="checkbox"/>Proteotypic</div>');
+        jQuery(this.reader.renderers).each(function(i){
+            this.createGroupCheckbox('proteotypic_experimental',jQuery('input.group_toggle',a_container));
+        });
+        return a_container;
+    } else {
+        return null;
+    }
+};/** @fileOverview   Classes for reading data from the Proteotypic database
+ */
+if ( typeof MASCP === 'undefined' || typeof MASCP.Service === 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
+
+
+/** Default class constructor
  *  @class      Service class that will retrieve data from Rippdb for a given AGI.
  *  @param      {String} agi            Agi to look up
  *  @param      {String} endpointURL    Endpoint URL for this service
@@ -3481,20 +4025,13 @@ MASCP.RippdbReader.Result = MASCP.RippdbReader.Result;
  */
 MASCP.RippdbReader.Result.prototype.getSpectra = function()
 {
-    var content = null;
-
-    if (this._spectra) {
-        return this._spectra;
-    }
 
     if (! this._raw_data || ! this._raw_data.spectra ) {
         return [];
     }
 
 
-    this._spectra = this._raw_data.spectra;
-    
-    return this._spectra;
+    return this._raw_data.spectra;
 };
 
 MASCP.RippdbReader.Result.prototype._cleanSequence = function(sequence)
@@ -4469,6 +5006,51 @@ MASCP.UbiquitinReader.Result.prototype.getAllExperimentalPositions = function()
 MASCP.UbiquitinReader.Result.prototype.render = function()
 {
 };/**
+ * @fileOverview    Classes for reading data from Uniprot database
+ */
+
+if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
+
+
+
+/** Default class constructor
+ *  @class      Service class that will retrieve data from Uniprot for a given AGI.
+ *  @param      {String} agi            Agi to look up
+ *  @param      {String} endpointURL    Endpoint URL for this service
+ *  @extends    MASCP.Service
+ */
+MASCP.UniprotReader = MASCP.buildService(function(data) {
+                        this._data = data || {};
+                        if ( ! this._data.data ) {
+                            this._data = { 'data' : ['',''] };
+                        }
+                        return this;
+                    });
+
+MASCP.UniprotReader.SERVICE_URL = 'http://gator.masc-proteomics.org/uniprot.pl?';
+
+MASCP.UniprotReader.prototype.requestData = function()
+{
+    var self = this;
+    return {
+        type: "GET",
+        dataType: "json",
+        data: { 'acc'   : this.agi,
+                'service' : 'uniprot' 
+        }
+    };
+};
+
+MASCP.UniprotReader.Result.prototype.getDescription = function() {
+    return this._data.data[1];
+};
+
+MASCP.UniprotReader.Result.prototype.getSequence = function() {
+    return this._data.data[0];
+};
+/**
  * @fileOverview    Classes for getting arbitrary user data onto the GATOR
  */
 
@@ -4486,22 +5068,9 @@ MASCP.UserdataReader = MASCP.buildService(function(data) {
                         if ( ! data ) {
                             return this;
                         }
-                        this.data = data ? data.data : data;
-                        (function(self) {
-                            self.getPeptides = function() {
-                                return data.data;
-                            };
-                        })(this);
+                        this._raw_data = data;
                         return this;
                     });
-
-/* File formats
-
-ATXXXXXX.XX,123-456
-ATXXXXXX.XX,PSDFFDGFDGFDG
-ATXXXXXX.XX,123,456
-
-*/
 
 MASCP.UserdataReader.prototype.toString = function() {
     return 'MASCP.UserdataReader.'+this.datasetname;
@@ -4638,6 +5207,10 @@ MASCP.UserdataReader.prototype.setData = function(name,data) {
 
     var self = this;
     
+    // Call CacheService on this object/class
+    // just to make sure that it has access
+    // to the cache retrieval mechanisms
+
     MASCP.Service.CacheService(this);
     
     this.datasetname = name;
@@ -4647,35 +5220,41 @@ MASCP.UserdataReader.prototype.setData = function(name,data) {
     inserter.datasetname = name;
     inserter.data = data;
     
-    inserter.retrieve = function(agi,cback) {
-        this.agi = agi;
-        this._dataReceived(find_peptide_cols(filter_agis(this.data,this.agi)));
+    inserter.retrieve = function(an_acc,cback) {
+        this.agi = an_acc;
+        this._dataReceived(data[this.agi]);
         cback.call(this);
     };
     
     MASCP.Service.CacheService(inserter);
-    
-    var agis = filter_agis(data);
+
+    var accs = [];
+    var acc;
+    for (acc in data) {
+        if (data.hasOwnProperty(acc)) {
+            accs.push(acc);
+        }
+    }
 
     var retrieve = this.retrieve;
 
-    this.retrieve = function(agi,cback) {
+    this.retrieve = function(id,cback) {
         console.log("Data not ready! Waiting for ready state");
         var self = this;        
         bean.add(self,'ready',function() {
             bend.remove(self,'ready',arguments.callee);
-            self.retrieve(agi,cback);
+            self.retrieve(id,cback);
         });
     };
 
     (function() {
-        if (agis.length === 0) {
+        if (accs.length === 0) {
             self.retrieve = retrieve;
             bean.fire(self,'ready');
             return;
         }
-        var agi = agis.shift();     
-        inserter.retrieve(agi,arguments.callee);
+        var acc = accs.shift();     
+        inserter.retrieve(acc,arguments.callee);
     })();
 
 };
@@ -4692,7 +5271,219 @@ MASCP.UserdataReader.datasets = function(cback) {
     });
 };
 
-})();MascotToJSON = function() {
+})();/** @fileOverview   Classes for reading data from the Clustal tool
+ */
+if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
+
+/** Default class constructor
+ *  @class      Service class that will retrieve data from Clustal for given sequences
+ *  @param      {String} endpointURL    Endpoint URL for this service
+ *  @extends    MASCP.Service
+ */
+MASCP.ClustalRunner = MASCP.buildService(function(data) {
+                        this._raw_data = data;
+                        if (data && typeof data == 'string') {
+                            this._raw_data = { 'data' : { 'sequences' : this.getSequences(), 'alignment' : this.getAlignment() } };
+                        }
+                        return this;
+                    });
+
+MASCP.ClustalRunner.SERVICE_URL = 'http://www.ebi.ac.uk/Tools/services/rest/clustalw2/run/';
+
+MASCP.ClustalRunner.hash = function(str){
+    var hash = 0;
+    for (i = 0; i < str.length; i++) {
+        char = str.charCodeAt(i);
+        hash = char + (hash << 6) + (hash << 16) - hash;
+    }
+    return hash;
+};
+
+MASCP.ClustalRunner.prototype.requestData = function()
+{   
+    var sequences = [].concat(this.sequences || []);
+    this.agi = MASCP.ClustalRunner.hash(this.sequences.join(','))+'';
+    if (! MASCP.ClustalRunner.SERVICE_URL.match(/ebi/)) {
+        return {
+            type: "POST",
+            dataType: "json",
+            data : {
+                'sequences' : sequences.join(",")
+            }
+        };
+    }
+    if (this.job_id) {
+        return {
+            type: "GET",
+            dataType: "txt",
+            url: 'http://www.ebi.ac.uk/Tools/services/rest/clustalw2/status/'+this.job_id
+        };
+    }
+    if (this.result_id) {
+        return {
+            type: "GET",
+            dataType: "txt",
+            url: 'http://www.ebi.ac.uk/Tools/services/rest/clustalw2/result/'+this.result_id+'/aln-clustalw'
+        };        
+    }
+    
+    for (var i = 0; i < sequences.length; i++ ) {
+        sequences[i] = ">seq"+i+"\n"+sequences[i];
+    }
+    return {
+        type: "POST",
+        dataType: "txt",
+        data: { 'sequence' : escape(sequences.join("\n")+"\n"),
+                'email'    : 'joshi%40sund.ku.dk'
+        }
+    };
+};
+
+(function(serv) {
+    var defaultDataReceived = serv.prototype._dataReceived;
+
+    serv.prototype._dataReceived = function(data,status)
+    {
+        if (data === null) {
+            return defaultDataReceived.call(this,null,status);
+        }
+        if (typeof data == "object") {
+            return defaultDataReceived.call(this,data,status);
+        }
+        
+        if (typeof data == "string" && data.match(/^clustalw/)) {
+            this.job_id = data;
+            this.retrieve(this.agi);
+            return;
+        }
+        if (data.match(/FINISHED/)) {
+            this.result_id = this.job_id;
+            this.job_id = null;
+            var self = this;
+            setTimeout(function() {
+                self.retrieve(self.agi);
+            },500);
+            return;
+        }
+        if (data.match(/RUNNING/)) {
+            var self = this;
+            setTimeout(function() {
+                self.retrieve(self.agi);
+            },500);
+            return;
+        }
+        
+        return defaultDataReceived.call(this,data,status);
+    };
+    
+})(MASCP.ClustalRunner);
+
+(function() {
+var normalise_insertions = function(inserts) {
+    var pos;
+    var positions = [];
+    var result_data = {};
+    for (pos in inserts) {
+        if (inserts.hasOwnProperty(pos)) {
+            positions.push(pos);
+        }
+    }
+    positions = positions.sort();
+    for (var i = positions.length - 1; i >= 0; i--) {
+        var j = i - 1;
+        pos = parseInt(positions[i]);
+        var value = inserts[pos];
+        while (j >= 0) {
+            pos -= inserts[positions[j]].length;
+            j--;
+        }
+        result_data[pos+1] = value;
+    }
+    delete result_data[0];
+    return result_data;
+};
+
+var splice_char = function(seqs,index,insertions) {
+    for (var i = 0; i < seqs.length; i++) {
+        var seq = seqs[i];
+        if (seq.charAt(index) != '-') {
+            if ( ! insertions[i] ) {
+                insertions[i] = {};
+                insertions[i][-1] = '';
+            }
+            insertions[i][index - 1] = seq.charAt(index);
+            if (insertions[i][index]) {
+                insertions[i][index-1] += insertions[i][index];
+                delete insertions[i][index];
+            }
+        } else {
+            if ( insertions[i] ) {
+                insertions[i][-1] += ' ';
+            }
+        }
+        seqs[i] = seq.slice(0,index) + seq.slice(index+1);
+    }
+}
+
+MASCP.ClustalRunner.Result.prototype.alignToSequence = function(seq_index) {
+    var seqs = this._raw_data.data.sequences.concat([this._raw_data.data.alignment]);
+    var insertions = [];
+    var aligning_seq = seqs[seq_index], i = aligning_seq.length - 1;
+    for (i; i >= 0; i--) {
+        if (aligning_seq.charAt(i) == '-') {
+            splice_char(seqs,i,insertions);
+        }
+    }
+    for (i = 0; i < seqs.length; i++) {
+        if (insertions[i]) {
+            insertions[i] = normalise_insertions(insertions[i]);
+            var seq = seqs[i];
+            seqs[i] = { 'sequence' : seq, 'insertions' : insertions[i] };
+            seqs[i].toString = function() {
+                return this.sequence;
+            };
+        }
+    }
+    this._raw_data.data.alignment = seqs.pop();
+    this._raw_data.data.sequences = seqs;
+};
+
+})();
+
+MASCP.ClustalRunner.Result.prototype.getSequences = function() {
+    if (this._raw_data && this._raw_data.data && this._raw_data.data.sequences) {
+        return [].concat(this._raw_data.data.sequences);
+    }
+    var bits = this._raw_data.match(/seq\d+(.*)/g);
+    var results = [];
+    for (var i = 0; i < bits.length; i++) {
+        var seqbits = bits[i].match(/seq(\d+)\s+(.*)/);
+        if (! results[seqbits[1]]) {
+            results[seqbits[1]] = '';
+        }
+        results[seqbits[1]] += seqbits[2];
+    }
+    return results;
+};
+
+MASCP.ClustalRunner.Result.prototype.getAlignment = function() {
+    if (this._raw_data && this._raw_data.data && this._raw_data.data.alignment) {
+        return this._raw_data.data.alignment.toString();
+    }
+    this._text_data = this._raw_data;
+    var re = / {16}(.*)/g;
+    var result = "";
+    var match = re.exec(this._raw_data);
+    while (match !== null) {
+        result += match[1];
+        match = re.exec(this._raw_data);
+    }
+
+    return result;
+};
+MascotToJSON = function() {
 };
 
 (function() {

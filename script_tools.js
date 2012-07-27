@@ -17,9 +17,9 @@ exports.get_data = function(agi,service) {
             result.error = err;
             return;
         }
-        result.result = this.result;
+        print_line(this.result);
     })
-    return result;
+    return;
 };
 
 exports.find_motif = function(agi,motif) {
