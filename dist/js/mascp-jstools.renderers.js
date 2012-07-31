@@ -1113,6 +1113,7 @@ MASCP.SequenceRenderer.prototype.withoutRefresh = function(func)
 {
     var curr_refresh = this.refresh;
     this.refresh = function() {};
+    this.refresh.suspended = true;
     func.apply(this);
     this.refresh = curr_refresh;
 };
@@ -1317,29 +1318,9 @@ var SVGCanvas = SVGCanvas || (function() {
                             curr_style += '; '+hash[key];
                             value = curr_style;
                         }
-                        if (key == 'height' && an_array[i].hasAttribute('transform')) {
-                            curr_transform = an_array[i].getAttribute('transform');
-
-                            var curr_scale = /scale\((-?\d+\.?\d*)\)/.exec(an_array[i].getAttribute('transform'));
-                        
-                            var curr_height = parseFloat(an_array[i].getAttribute('height') || 1);
-                        
-                            var new_scale = 1;
-                            if (curr_scale === null) {
-                                curr_transform += ' scale(1) ';
-                                curr_scale = 1;
-                            } else {
-                                curr_scale = parseFloat(curr_scale[1]);
-                            }
-                        
-                        
-                            new_scale = ( parseFloat(hash[key]) / curr_height ) * curr_scale;
-                        
-                            curr_transform = curr_transform.replace(/scale\((-?\d+\.?\d*)\)/,'scale('+new_scale+')');
-
-                            an_array[i].setAttribute('transform',curr_transform);
-                        }
-                        if  (! (an_array[i].hasAttribute('transform') && (key == 'y' || key == 'x'))) {
+                        if (key == 'height' && an_array[i].setHeight ) { //hasAttribute('transform') && ! an_array[i].no_scale) {
+                            an_array[i].setHeight(hash[key]);
+                        } else if  (! (an_array[i].hasAttribute('transform') && (key == 'y' || key == 'x'))) {
                             an_array[i].setAttribute(key, value);                        
                         }
                         if (key == 'y' && an_array[i].hasAttribute('d')) {
@@ -1487,7 +1468,33 @@ var SVGCanvas = SVGCanvas || (function() {
             
         },rate);
     };
+    var scale_re = /scale\((-?\d+\.?\d*)\)/;
+    var setHeight = function(height) {
+        var curr_transform = this.getAttribute('transform').toString();
+
+        var curr_scale = scale_re.exec(curr_transform);
     
+        var curr_height = parseFloat(this.getAttribute('height') || 1);
+        console.log("curr height is "+curr_height);
+        console.log("target height is "+height);
+        console.log("current scale is "+curr_scale[1]);
+        console.log(curr_transform);
+        var new_scale = 1;
+        if (curr_scale === null) {
+            curr_transform += ' scale(1) ';
+            curr_scale = 1;
+        } else {
+            curr_scale = parseFloat(curr_scale[1]);
+        }
+        new_scale = ( parseFloat(height) / curr_height ) * curr_scale;
+        curr_transform = curr_transform.replace(scale_re,'scale('+new_scale+')');
+        console.log(curr_transform);
+
+        this.setAttribute('transform',curr_transform);
+        this.setAttribute('height',height);
+        return new_scale;
+    };
+
     return (function(canvas) {
         
         var RS = canvas.RS || DEFAULT_RS;
@@ -1693,15 +1700,40 @@ var SVGCanvas = SVGCanvas || (function() {
 
         canvas.growingMarker = function(x,y,symbol,opts) {
             var container = document.createElementNS(svgns,'svg');
-            container.setAttribute('viewBox', '-50 -100 150 300');
+            container.setAttribute('viewBox', '-50 -100 200 250');
             container.setAttribute('preserveAspectRatio', 'xMinYMin meet');
             container.setAttribute('x',x);
             container.setAttribute('y',y);
-            var the_marker = this.marker(50/RS,50/RS,50/RS,symbol,opts);
+            var the_marker = this.marker(50/RS,(50)/RS,50/RS,symbol,opts);
             container.appendChild(the_marker);
             container.contentElement = the_marker.contentElement;
             var result = this.group();
-            result.appendChild(container);
+            var positioning_group = this.group();
+            result.appendChild(positioning_group);
+            positioning_group.appendChild(container);
+            container.setAttribute('width','200');
+            container.setAttribute('height','250');
+            result.setAttribute('height','250');
+            result.setAttribute('transform','scale(1)');
+            result.setHeight = function(height) {
+                // this.setAttribute('height',height);
+                var scale_val = setHeight.call(this,height);
+                this.setAttribute('height',height);
+                var top_offset = this.offset;                
+                var widget_width = this.firstChild.firstChild.getBBox().width;
+                var widget_height = parseFloat(this.firstChild.firstChild.getAttribute('height'));
+                var centering_offset = 3/5*widget_height;
+                if (this.angle > 10) {
+                    centering_offset = 0;
+                }
+                if (top_offset == 0) {
+                    centering_offset = 0;
+                }
+                if (this.setHeight != arguments.callee ) {
+                    scale_val = 1;
+                }
+                this.firstChild.setAttribute('transform','translate(-100,'+(top_offset*RS/scale_val - centering_offset)+') rotate('+this.angle+',100,0)');
+            };
             return result;
         };
 
@@ -1752,6 +1784,7 @@ var SVGCanvas = SVGCanvas || (function() {
             arrow.setAttribute('style','fill:'+fill_color+';stroke-width: 0;');
             marker.push(arrow);
             marker.setAttribute('transform','translate('+((cx)*RS)+','+0.5*cy*RS+') scale(1)');
+            marker.setHeight = setHeight;
             marker.setAttribute('height', dim.R*RS);
             if (typeof symbol == 'string') {
                 marker.contentElement = this.text_circle(0,0.5*r,1.75*r,symbol,opts);
@@ -1804,6 +1837,9 @@ var SVGCanvas = SVGCanvas || (function() {
 
             var back = this.circle(0,dim.CY,9/10*dim.R);
             back.setAttribute('fill','url(#simple_gradient)');
+            window.matchMedia('print').addListener(function(match) {
+                back.setAttribute('fill',match.matches ? '#aaaaaa': 'url(#simple_gradient)');
+            });
             back.setAttribute('stroke', opts.border || '#000000');
             back.setAttribute('stroke-width', (r/10)*RS);
 
@@ -1819,6 +1855,7 @@ var SVGCanvas = SVGCanvas || (function() {
 
             marker_group.setAttribute('transform','translate('+dim.CX*RS+', 1) scale(1)');
             marker_group.setAttribute('height', (dim.R/2)*RS );
+            marker_group.setHeight = setHeight;
             return marker_group;
         };
 
@@ -2131,6 +2168,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
                     this.currentTranslate.x = x;
                     this.currentTranslate.y = y;
             };
+            canv.setCurrentTranslateXY(0,0);
         
             nav_canvas.setCurrentTranslateXY = function(x,y) {
                     var curr_transform = (nav_group.getAttribute('transform') || '').replace(/translate\([^\)]+\)/,'');
@@ -2139,6 +2177,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
                     this.currentTranslate.x = x;
                     this.currentTranslate.y = y;
             };
+            nav_canvas.setCurrentTranslateXY(0,0);
         
 
         
@@ -2185,135 +2224,21 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
 
         if ( ! MASCP.IE ) {
         jQuery(this._canvas).bind('panstart',hide_chrome);
-        jQuery(this._canvas).bind('panend',show_chrome);
+        bean.add(this._canvas,'panend',show_chrome);
         jQuery(this._canvas).bind('_anim_begin',hide_chrome);
         jQuery(this._canvas).bind('_anim_end',show_chrome);
         }
     };
-
-    var drawAminoAcids = function(canvas) {
-        var RS = this._RS;
-        var seq_chars = this.sequence.split('');
+    var drawAminoAcids = function() {
         var renderer = this;
-        //var aa_selection = document.createElement('div');
-        // We need to prepend an extra > to the sequence since there is a bug with Safari failing
-        // to select reliably when you set the start offset for the range to 0
-        //aa_selection.appendChild(document.createTextNode(">"+this.sequence));
-        //renderer._container.appendChild(aa_selection);
-        //aa_selection.style.top = '110%';
-        //aa_selection.style.height = '1px';
-        //aa_selection.style.overflow = 'hidden';
-    
-        var amino_acids = canvas.set();
-        var amino_acids_shown = false;
-        var x = 0;
-    
-        var has_textLength = true;
-        var no_op = function() {};
-        try {
-            var test_el = document.createElementNS(svgns,'text');
-            test_el.setAttribute('textLength',10);
-            no_op(test_el.textLength);
-        } catch (e) {
-            has_textLength = false;
-        }
-
-        /* We used to test to see if there was a touch event
-           when doing the textLength method of amino acid
-           layout, but iOS seems to support this now.
-           
-           Test case for textLength can be found here
-           
-           http://jsfiddle.net/nkmLu/11/embedded/result/
-        */
-
+        var aas = renderer.addTextTrack(this.sequence,this._canvas.set());
+        aas.attr({'y' : 12*renderer._RS});
         renderer.select = function() {
             var vals = Array.prototype.slice.call(arguments);
             var from = vals[0];
             var to = vals[1];
-        //     var sel = window.getSelection();
-        //     if(sel.rangeCount > 0) {
-        //         sel.removeAllRanges();
-        //     }
-        //     var range = document.createRange();
-        //     range.selectNodeContents(aa_selection.childNodes[0]);
-        //     sel.addRange(range);
-        //     sel.removeAllRanges();
-        //     range.setStart(aa_selection.childNodes[0],from+1);
-        //     range.setEnd(aa_selection.childNodes[0],to+1);
-        //     sel.addRange(range);
             this.moveHighlight.apply(this,vals);
         };
-        var a_text;
-    
-        if (has_textLength && ('lengthAdjust' in document.createElementNS(svgns,'text')) && ('textLength' in document.createElementNS(svgns,'text'))) {
-            if (this.sequence.length <= 1500) {
-                a_text = canvas.text(0,12,document.createTextNode(this.sequence));
-                a_text.setAttribute('textLength',RS*this.sequence.length);
-            } else {
-                a_text = canvas.text(0,12,document.createTextNode(this.sequence.substr(0,1500)));
-                a_text.setAttribute('textLength',RS*1500);
-            }
-            a_text.style.fontFamily = "'Lucida Console', 'Courier New', Monaco, monospace";
-            a_text.setAttribute('lengthAdjust','spacing');
-            a_text.setAttribute('text-anchor', 'start');
-            a_text.setAttribute('dx',5);
-            a_text.setAttribute('font-size', RS);
-            a_text.setAttribute('fill', '#000000');
-            amino_acids.push(a_text);
-        } else {    
-            for (var i = 0; i < seq_chars.length; i++) {
-                a_text = canvas.text(x,12,seq_chars[i]);
-                a_text.firstChild.setAttribute('dy','1.5ex');
-                amino_acids.push(a_text);
-                a_text.style.fontFamily = "'Lucida Console', Monaco, monospace";
-                x += 1;
-            }
-            amino_acids.attr( { 'y':-1000,'width': RS,'text-anchor':'start','height': RS,'font-size':RS,'fill':'#000000'});
-        }
-        var update_sequence = function() {
-            if (renderer.sequence.length <= 1500) {
-                return;
-            }
-            var start = parseInt(renderer.leftVisibleResidue());
-            start -= 50;
-            if (start < 0) { 
-                start = 0;
-            }
-            if ((start + 1500) >= renderer.sequence.length) {
-                start = renderer.sequence.length - 1500 - 1;
-            }
-            a_text.replaceChild(document.createTextNode(renderer.sequence.substr(start,1500)),a_text.firstChild);
-            a_text.setAttribute('dx',5+((start)*RS));
-        };
-        
-        canvas.addEventListener('panstart', function() {
-            if (amino_acids_shown) {
-                amino_acids.attr( { 'display' : 'none'});
-            }
-            jQuery(canvas).bind('panend', function() {
-                if (amino_acids_shown) {
-                    amino_acids.attr( {'display' : 'block'});
-                    update_sequence();
-                }
-                jQuery(canvas).unbind('panend',arguments.callee);
-            });
-        },false);
-           
-        canvas.addEventListener('zoomChange', function() {
-           if (canvas.zoom > 3.5) {
-               renderer._axis_height = 14;
-               amino_acids.attr({'y': 12*RS, 'visibility' : 'visible'});
-               amino_acids_shown = true;
-               update_sequence();
-           } else {
-               renderer._axis_height = 30;
-               amino_acids.attr({'y':-1000, 'visibility' : 'hidden'});   
-               amino_acids_shown = false;        
-           }
-           renderer.refresh();
-       },false);
-   
     };
 
     var drawAxis = function(canvas,lineLength) {
@@ -2426,12 +2351,20 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
 
     clazz.prototype.leftVisibleResidue = function() {
         var self = this;
-        return Math.floor((self.sequence.length+self.padding+2)*(1-((self._canvas.width.baseVal.value + self._canvas.currentTranslate.x) / self._canvas.width.baseVal.value)))-1;
+        var val = Math.floor((self.sequence.length+self.padding+2)*(1-((self._canvas.width.baseVal.value + self._canvas.currentTranslate.x) / self._canvas.width.baseVal.value)))-1;
+        if (val < 0) {
+            val = 0;
+        }
+        return val;
     };
 
     clazz.prototype.rightVisibleResidue = function() {
         var self = this;
-        return Math.floor(self.leftVisibleResidue() + (self.sequence.length+self.padding+2)*(self._container_canvas.parentNode.getBoundingClientRect().width / self._canvas.width.baseVal.value));
+        var val = Math.floor(self.leftVisibleResidue() + (self.sequence.length+self.padding+2)*(self._container_canvas.parentNode.getBoundingClientRect().width / self._canvas.width.baseVal.value));
+        if (val > self.sequence.length) {
+            val = self.sequence.length;
+        }
+        return val;
     };
 
     clazz.prototype.setSequence = function(sequence) {
@@ -2553,6 +2486,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
             drawAxis.call(this,canv,line_length);
             drawAminoAcids.call(this,canv);
             renderer._layer_containers = {};
+            renderer.enablePrintResizing();
             jQuery(renderer).trigger('sequenceChange');
         });
     
@@ -2697,7 +2631,7 @@ var addElementToLayer = function(layerName) {
             return renderer._visibleTracers();
         };
     }
-    var tracer_marker = canvas.marker(this._index+0.3,10,0.5,layerName.charAt(0).toUpperCase());
+    var tracer_marker = canvas.marker(this._index+0.5,10,0.5,layerName.charAt(0).toUpperCase());
     
     // tracer_marker.zoom_level = 'text';
     tracer_marker.setAttribute('visibility','hidden');
@@ -2739,6 +2673,9 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
         var el_max_x = el_x + parseFloat(container[i].getAttribute('width'));
         if ((el_x <= rect_x && rect_x <= el_max_x) ||
             (rect_x <= el_x && el_x <= rect_max_x)) {
+                if (container[i].style.opacity != fraction) {
+                    continue;
+                }
                 container[i].setAttribute('x', ""+Math.min(el_x,rect_x));
                 container[i].setAttribute('width', ""+(Math.max(el_max_x,rect_max_x)-Math.min(el_x,rect_x)) );
                 rect.parentNode.removeChild(rect);
@@ -2750,19 +2687,9 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     rect.style.strokeWidth = '0px';
     rect.setAttribute('visibility', 'hidden');
     rect.style.opacity = fraction;
-    rect.setAttribute('fill',MASCP.layers[layerName].color);
+    rect.setAttribute('fill','#000099');
     rect.position_start = this._index;
     rect.position_end = this._index + width;
-//    rect.setAttribute('pointer-events','none');
-    
-/*
-    var shine = canvas.rect(-0.25+this._index,60,width || 1,4);
-    this._renderer._layer_containers[layerName].push(shine);    
-    shine.style.strokeWidth = '0px';
-    shine.style.fill = 'url(#track_shine)';
-    shine.setAttribute('display','none');
-    shine._is_shine = true;
-*/
     return rect;
 };
 
@@ -2787,18 +2714,6 @@ var addElementToLayerWithLink = function(layerName,url,width) {
     rect.setAttribute('fill',MASCP.layers[layerName].color);
     rect.setAttribute('visibility', 'hidden');
     rect.setAttribute('class',layerName);
-
-    // BIG POTENTIAL PERFORMANCE HIT HERE?
-//    rect.setAttribute('pointer-events','none');
-    
-/*
-    var shine = canvas.rect(-0.25+this._index,60,width || 1,4);
-    this._renderer._layer_containers[layerName].push(shine);    
-    shine.style.strokeWidth = '0px';
-    shine.style.fill = 'url(#track_shine)';
-    shine.setAttribute('display','none');
-    shine._is_shine = true;
-*/
     return rect;
 };
 
@@ -2882,10 +2797,11 @@ var addAnnotationToLayer = function(layerName,width,opts) {
 
     var blob_exists = (typeof all_annotations[layerName][blob_id]) !== 'undefined';
 
-    var height = default_annotation_height;
-    var offset = this._renderer._RS * height / 2;
-    var blob = all_annotations[layerName][blob_id] ? all_annotations[layerName][blob_id] : canvas.growingMarker(0,offset,opts.content,opts);
-    
+    var height = opts.height || this._renderer._layer_containers[layerName].track_height;
+
+    var offset = this._renderer._RS * height / 2; //this._renderer._RS * height / 2;
+    var blob = all_annotations[layerName][blob_id] ? all_annotations[layerName][blob_id] : canvas.growingMarker(0,0,opts.content,opts);
+
     if (opts.angle == 'auto') {
         if ( ! blob.contents ) {
             blob.contents = [opts.content];
@@ -2901,21 +2817,41 @@ var addAnnotationToLayer = function(layerName,width,opts) {
         blob = all_annotations[layerName][blob_id] ? all_annotations[layerName][blob_id] : canvas.growingMarker(0,offset,opts.content,opts);
     }    
     
-    blob.setAttribute('transform','translate('+((this._index + 0.25 - 0.1) * this._renderer._RS) +',0.01) scale(1,1) translate(0) rotate('+opts.angle+',0.01,'+offset+')');
+    blob.setAttribute('transform','translate('+((this._index + 0.5) * this._renderer._RS) +',0.01) scale(1)');
+    blob.setAttribute('height','250');
+    blob.firstChild.setAttribute('transform', 'translate(-100,0) rotate('+opts.angle+',100,0.001)');
+
+    blob.angle = opts.angle;
     all_annotations[layerName][blob_id] = blob;
     if ( ! blob_exists ) {
         blob._value = 0;
         this._renderer._layer_containers[layerName].push(blob);
-        this._renderer._layer_containers[layerName].fixed_track_height = default_annotation_height;
+        if (typeof opts.offset == 'undefined' || opts.offset === null) {
+           opts.offset = height / 2;
+        }
+        blob.offset = opts.offset;
+
+        blob.height = height;
+        if ( ! opts.height ) {
+           this._renderer._layer_containers[layerName].fixed_track_height = height;
+        } else {
+            var old_set_height = blob.setHeight;
+            blob.setHeight = function(height) { 
+                if (arguments.callee.caller != renderer.redrawAnnotations) {
+                    return;
+                }
+                return old_set_height.call(this,height);
+            };
+        }
     }
     
     blob._value += width;
     if ( ! blob_exists ) {
-        var bobble = canvas.circle(this._index+0.3,10+height,0.25);
+        var bobble = canvas.circle(this._index+0.5,10+height,0.25);
         bobble.setAttribute('visibility','hidden');
         bobble.style.opacity = '0.4';
 
-        var tracer = canvas.rect(this._index+0.25,10+height,0.05,0);
+        var tracer = canvas.rect(this._index+0.5,10+height,0.05,0);
         tracer.style.strokeWidth = '0px';
         tracer.style.fill = '#777777';
         tracer.setAttribute('visibility','hidden');
@@ -2948,40 +2884,28 @@ MASCP.CondensedSequenceRenderer.prototype._extendElement = function(el) {
     el.callout = addCalloutToLayer;
 };
 
+var zoomFunctions = [];
 
-MASCP.CondensedSequenceRenderer.prototype.renderTextTrack = function(lay,in_text) {
-    var layerName = lay;
-    if (typeof layerName !== 'string') {
-        layerName = lay.name;
+MASCP.CondensedSequenceRenderer.prototype.addUnderlayRenderer = function(underlayFunc) {
+    if (zoomFunctions.length == 0) {
+        this.bind('zoomChange',function() {
+            for (var i = zoomFunctions.length - 1; i >=0; i--) {
+                zoomFunctions[i].call(this, this.zoom, this._canvas);
+            }
+        });
     }
-    var canvas = this._canvas;
-    if ( ! canvas || typeof layerName == 'undefined') {
-        return;
-    }
+    zoomFunctions.push(underlayFunc);
+};
+
+MASCP.CondensedSequenceRenderer.prototype.addTextTrack = function(seq,container) {
     var RS = this._RS;
     var renderer = this;
+    var max_length = 300;
+    var canvas = renderer._canvas;
+    var seq_chars = seq.split('');
 
-    var rows = parseInt(in_text.length / this.sequence.length);
-    var texts = [];
-
-    if (rows > 1) {
-        var grps = in_text.match(new RegExp( ".{"+rows+"}", "g"));
-        for (var i = 0; i < grps.length; i++) {
-            var tot_length = grps[i].length - 1;
-            while (tot_length >= 0) {
-                if ( ! texts[tot_length] ) {
-                    texts[tot_length] = "";
-                }
-                texts[tot_length] += grps[i].charAt(tot_length);
-                tot_length -= 1;
-            }
-        }
-    } else {
-        texts = [in_text];
-    }
-
-    var container = this._layer_containers[layerName];
-
+    var amino_acids = canvas.set();
+    var amino_acids_shown = false;
     var x = 0;
 
     var has_textLength = true;
@@ -2994,53 +2918,102 @@ MASCP.CondensedSequenceRenderer.prototype.renderTextTrack = function(lay,in_text
         has_textLength = false;
     }
 
-    if ("ontouchend" in document) {
-        has_textLength = false;
-    }
+    /* We used to test to see if there was a touch event
+       when doing the textLength method of amino acid
+       layout, but iOS seems to support this now.
+       
+       Test case for textLength can be found here
+       
+       http://jsfiddle.net/nkmLu/11/embedded/result/
+    */
 
     var a_text;
 
     if (has_textLength && ('lengthAdjust' in document.createElementNS(svgns,'text')) && ('textLength' in document.createElementNS(svgns,'text'))) {
-        for (var i = 0 ; i < texts.length; i++) {
-            a_text = canvas.text(0,12,document.createTextNode(texts[i]));
-            a_text.style.fontFamily = "'Lucida Console', 'Courier New', Monaco, monospace";
-            a_text.setAttribute('lengthAdjust','spacing');
-            a_text.setAttribute('textLength',RS*this.sequence.length);
-            a_text.setAttribute('text-anchor', 'start');
-            a_text.setAttribute('dx',5);
-            a_text.setAttribute('dy',(i+0.25)*RS);
-            a_text.setAttribute('font-size', RS);
-            a_text.setAttribute('fill', '#000000');
-            if (texts.length > 1) { 
-                a_text.setAttribute('rotate','90');
-            }
-            container.push(a_text);
+        if (seq.length <= max_length) {
+            a_text = canvas.text(0,12,document.createTextNode(seq));
+            a_text.setAttribute('textLength',RS*seq.length);
+        } else {
+            a_text = canvas.text(0,12,document.createTextNode(seq.substr(0,max_length)));
+            a_text.setAttribute('textLength',RS*max_length);
         }
-        container.fixed_track_height = texts.length;
-    } else {
-        var seq_chars = in_text.split('');
+        a_text.style.fontFamily = "'Lucida Console', 'Courier New', Monaco, monospace";
+        a_text.setAttribute('lengthAdjust','spacing');
+        a_text.setAttribute('text-anchor', 'start');
+        a_text.setAttribute('dx',5);
+        a_text.setAttribute('dy','1.5ex');
+        a_text.setAttribute('font-size', RS);
+        a_text.setAttribute('fill', '#000000');
+        amino_acids.push(a_text);
+        container.push(a_text);
+    } else {    
         for (var i = 0; i < seq_chars.length; i++) {
             a_text = canvas.text(x,12,seq_chars[i]);
-            a_text.firstChild.setAttribute('dy',(1.5*(i % texts.length))+'ex');
+            a_text.firstChild.setAttribute('dy','1.5ex');
+            amino_acids.push(a_text);
             container.push(a_text);
             a_text.style.fontFamily = "'Lucida Console', Monaco, monospace";
-            if ((i % texts.length) == 0 && i > 0) {
-                x += 1;
-            }
+            x += 1;
         }
-        container.attr( { 'y':-1000,'width': RS,'text-anchor':'start','height': RS,'font-size':RS,'fill':'#000000'});
+        amino_acids.attr( { 'width': RS,'text-anchor':'start','height': RS,'font-size':RS,'fill':'#000000'});
     }
-    
-     canvas.addEventListener('zoomChange', function() {
-        if (canvas.zoom > 3.5) {
-            renderer.showLayer(lay);
-        } else {
-            renderer.hideLayer(lay);
+    var update_sequence = function() {
+        if (seq.length <= max_length) {
+            return;
         }
-        renderer.refresh();
+        var start = parseInt(renderer.leftVisibleResidue());
+        start -= 50;
+        if (start < 0) { 
+            start = 0;
+        }
+        if ((start + max_length) >= seq.length) {
+            start = seq.length - max_length;
+        }
+        a_text.replaceChild(document.createTextNode(seq.substr(start,max_length)),a_text.firstChild);
+        a_text.setAttribute('dx',5+((start)*RS));
+    };
+    
+    canvas.addEventListener('panstart', function() {
+        if (amino_acids_shown) {
+            amino_acids.attr( { 'display' : 'none'});
+        }
+        bean.add(canvas,'panend', function() {
+            if (amino_acids_shown) {
+                amino_acids.attr( {'display' : 'block'} );
+                update_sequence();
+            }
+            bean.remove(canvas,'panend',arguments.callee);
+        });
     },false);
-    
-    
+       
+    canvas.addEventListener('zoomChange', function() {
+       if (canvas.zoom > 3.6) {
+           renderer._axis_height = 14;
+           amino_acids.attr({'display' : 'block'});
+           amino_acids_shown = true;
+           update_sequence();
+       } else {
+           renderer._axis_height = 30;
+           amino_acids.attr({'display' : 'none'});   
+           amino_acids_shown = false;        
+       }
+   },false);
+
+   return amino_acids;
+};
+
+MASCP.CondensedSequenceRenderer.prototype.renderTextTrack = function(lay,in_text) {
+    var layerName = lay;
+    if (typeof layerName !== 'string') {
+        layerName = lay.name;
+    }
+    var canvas = this._canvas;
+    if ( ! canvas || typeof layerName == 'undefined') {
+        return;
+    }
+    var renderer = this;
+    var container = this._layer_containers[layerName];
+    this.addTextTrack(in_text,container);
 };
 
 MASCP.CondensedSequenceRenderer.prototype.resetAnnotations = function() {
@@ -3091,7 +3064,7 @@ MASCP.CondensedSequenceRenderer.prototype.redrawAnnotations = function(layerName
     var susp_id = canvas.suspendRedraw(10000);
     
     var max_value = 0;
-    var height = default_annotation_height;
+    // var height = this._layer_containers[layerName].fixed_track_height || this._layer_containers[layerName].track_height;
     var offset = 0;
     for (blob_idx in all_annotations[layerName]) {
         if (all_annotations[layerName].hasOwnProperty(blob_idx)) {
@@ -3109,20 +3082,15 @@ MASCP.CondensedSequenceRenderer.prototype.redrawAnnotations = function(layerName
     for (blob_idx in all_annotations[layerName]) {
         if (all_annotations[layerName].hasOwnProperty(blob_idx)) {
             var a_blob = all_annotations[layerName][blob_idx];
-            if ( ! a_blob.getAttribute ) {
+
+            var height = a_blob.height;
+            var track_height = this._layer_containers[layerName].fixed_track_height || this._layer_containers[layerName].track_height;
+
+            if ( ! a_blob.setHeight ) {
                 continue;
             }
-            var size_val = (0.3 + (0.6 * a_blob._value) / max_value)*(this._RS * height * 1);
-            offset = 0.5*((this._RS * height * 1) - size_val);
-            var curr_transform = a_blob.getAttribute('transform');
-            var transform_shift = ((-315.0/1000.0)*size_val);
-            var rotate_shift = (1.0/3.0)*size_val;
-            a_blob.firstChild.setAttribute('y',offset);
-            curr_transform = curr_transform.replace(/translate\(\s*(-?\d+\.?\d*)\s*\)/,'translate('+transform_shift+')');
-            curr_transform = curr_transform.replace(/,\s*(-?\d+\.?\d*)\s*,\s*\d+\.?\d*\s*\)/,','+rotate_shift+','+offset+')');
-            a_blob.setAttribute('transform', curr_transform);
-            a_blob.firstChild.setAttribute('width',size_val);
-            a_blob.firstChild.setAttribute('height',size_val);
+            var size_val = (0.4 + ((0.6 * a_blob._value) / max_value))*(this._RS * height * 1);
+            a_blob.setHeight(size_val);
         }
     }
     
@@ -3375,6 +3343,104 @@ clazz.prototype.removeTrack = function(layer) {
     
 };
 
+clazz.prototype.enablePrintResizing = function() {
+    var self = this;
+    if (self._media_func) {
+        return;
+    }
+    var old_zoom;
+    var old_translate;
+    var old_viewbox;
+    self._media_func = function(match) {
+        if ( self.grow_container ) {
+            return;
+        }
+
+        if (! match.matches ) {
+            if (old_zoom) {
+                self.zoomCenter = null;
+                self.withoutRefresh(function() {
+                  self.zoom = old_zoom;
+                });
+                self._canvas.setCurrentTranslateXY(old_translate,0);
+                self._container_canvas.setAttribute('viewBox',old_viewbox);
+                self._container.style.height = 'auto';
+                old_zoom = null;
+                old_translate = null;
+                self.refresh();
+                bean.fire(widget_rend._canvas,'zoomChange');
+            }
+            return;
+        }
+        var container = self._container;
+        old_translate = self._canvas.currentTranslate.x;
+        self._canvas.setCurrentTranslateXY(0,0);
+        var zoomFactor = 0.95 * (container.clientWidth) / (widget_rend.sequence.length);
+        if ( ! old_zoom ) {
+          old_zoom = self.zoom;
+          old_viewbox = self._container_canvas.getAttribute('viewBox');
+        }
+        self.zoomCenter = null;
+        self._container_canvas.removeAttribute('viewBox');
+
+        self.withoutRefresh(function() {
+            self.zoom = zoomFactor;
+        });
+        self.grow_container = true;
+        self.refresh();
+        self.grow_container = false;
+    };
+    window.matchMedia('print').addListener(self._media_func);
+};
+
+clazz.prototype.wireframe = function() {
+    var order = this.trackOrder || [];
+    var y_val = 0;
+    var track_heights = 0;
+    if ( ! this.wireframes ) {
+        return;
+    }
+    while (this.wireframes.length > 0) {
+        this._canvas.removeChild(this.wireframes.shift());
+    }
+    for (var i = 0; i < order.length; i++ ) {
+        
+        var name = order[i];
+        var container = this._layer_containers[name];
+        if (! this.isLayerActive(name)) {
+            continue;
+        }
+        if (container.fixed_track_height) {
+
+            var track_height = container.fixed_track_height;
+
+            y_val = this._axis_height + (track_heights  - track_height*0.3) / this.zoom;
+            var a_rect = this._canvas.rect(0,y_val,10000,0.5*track_height);
+            a_rect.setAttribute('stroke','#ff0000');
+            a_rect.setAttribute('fill','none');
+            this.wireframes.push(a_rect);
+            var a_rect = this._canvas.rect(0,y_val,10000,track_height);
+            a_rect.setAttribute('stroke','#ff0000');
+            a_rect.setAttribute('fill','none');
+            this.wireframes.push(a_rect);
+
+            track_heights += (this.zoom * track_height) + this.trackGap;
+        } else {
+            y_val = this._axis_height + track_heights / this.zoom;
+            var a_rect = this._canvas.rect(0,y_val,10000,0.5*container.track_height / this.zoom );
+            a_rect.setAttribute('stroke','#ff0000');
+            a_rect.setAttribute('fill','none');
+            this.wireframes.push(a_rect);
+            a_rect = this._canvas.rect(0,y_val,10000,container.track_height / this.zoom);
+            a_rect.setAttribute('stroke','#ff0000');
+            a_rect.setAttribute('fill','none');
+            this.wireframes.push(a_rect);
+            track_heights += container.track_height + this.trackGap;
+        }
+
+    }    
+};
+
 /**
  * Cause a refresh of the renderer, re-arranging the tracks on the canvas, and resizing the canvas if necessary.
  * @param {Boolean} animateds Cause this refresh to be an animated refresh
@@ -3474,10 +3540,11 @@ clazz.prototype.refresh = function(animated) {
         container.refresh_zoom();
 
     }
-
+    this.wireframe();
+    
     var viewBox = [-1,0,0,0];
     viewBox[0] = -2*RS;
-    viewBox[2] = (this.sequence.split('').length+(this.padding+2))*RS;
+    viewBox[2] = (this.sequence.split('').length+(this.padding)+2)*RS;
     viewBox[3] = (this._axis_height + (track_heights / this.zoom)+ (this.padding))*RS;
     this._canvas.setAttribute('viewBox', viewBox.join(' '));
     this._canvas._canvas_height = viewBox[3];
@@ -3553,8 +3620,12 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
             if (! self._canvas) {
                 return;
             }
+
+            var no_touch_center = false;
+
             if (self.zoomCenter == 'center') {
-                self.zoomCenter = {'x' : self._RS*(self.leftVisibleResidue()+0.5*(self.rightVisibleResidue() - self.leftVisibleResidue())) };
+                no_touch_center = true;
+                self.zoomCenter = {'x' : self._RS*0.5*(self.leftVisibleResidue()+self.rightVisibleResidue()) };
             }
             
             if ( self.zoomCenter && ! center_residue ) {
@@ -3580,7 +3651,12 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
             curr_transform = 'scale('+scale_value+') '+(curr_transform || '');
             self._canvas.parentNode.setAttribute('transform',curr_transform);
             jQuery(self._canvas).trigger('_anim_begin');
-
+            if (document.createEvent) {
+                evObj = document.createEvent('Events');
+                evObj.initEvent('panstart',false,true);
+                self._canvas.dispatchEvent(evObj);
+            }
+            var old_x = self._canvas.currentTranslate.x;
             if (center_residue) {
                 var delta = ((start_zoom - zoom_level)/(scale_value*25))*center_residue;
                 delta += start_x/(scale_value);
@@ -3595,12 +3671,17 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
                 curr_transform = curr_transform.replace(/scale\([^\)]+\)/,'');
                 self._canvas.parentNode.setAttribute('transform',curr_transform);
 
+                bean.fire(self._canvas,'panend');
                 jQuery(self._canvas).trigger('_anim_end');
 
                 jQuery(self._canvas).one('zoomChange',function() {
+                    self.refresh();
                     if (typeof center_residue != 'undefined') {
                         var delta = ((start_zoom - zoom_level)/(25))*center_residue;
                         delta += start_x;
+
+                        self._resizeContainer();
+
                         if (self._canvas.shiftPosition) {
                             self._canvas.shiftPosition(delta,0);
                         } else {
@@ -3622,16 +3703,18 @@ MASCP.CondensedSequenceRenderer.Zoom = function(renderer) {
                     }
                 }
                 jQuery(self).trigger('zoomChange');
-
-
             };
         
-            if (("ontouchend" in document) && self.zoomCenter) {
+            if (("ontouchend" in document) && self.zoomCenter && ! no_touch_center ) {
                 jQuery(self).unbind('gestureend');
                 jQuery(self).one('gestureend',end_function);
                 timeout = 1;
             } else {
-                timeout = setTimeout(end_function,100);
+                if (! this.refresh.suspended) {
+                    timeout = setTimeout(end_function,100);
+                } else {
+                    end_function();
+                }
             }
         },
 
@@ -4161,6 +4244,17 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
         var close_group = back_canvas.crossed_circle(nav_width-(10 + touch_scale*11),(12*touch_scale),(10*touch_scale));
 
         close_group.style.cursor = 'pointer';
+        if (typeof matchMedia !== 'undefined') {
+            matchMedia('print').addListener(function(match) {
+                if (match.matches) {
+                    close_group.setAttribute('display','none');
+                    tracks_button.setAttribute('display','none');
+                } else {
+                    close_group.setAttribute('display','block'); 
+                    tracks_button.setAttribute('display','none');
+                }
+            });
+        }
 
         button_group.push(close_group);
 
@@ -4383,7 +4477,7 @@ MASCP.CondensedSequenceRenderer.Navigation = (function() {
             a_text.setAttribute('font-size',0.6*height*text_scale);
             a_text.setAttribute('fill','#ffffff');
             a_text.setAttribute('stroke','#ffffff');
-            a_text.setAttribute('stroke-width','1');
+            a_text.setAttribute('stroke-width','0');
             a_text.firstChild.setAttribute('dy', '0.5ex');
 
             // r = track_canvas.rect(3*height*text_scale,y+0.5*height,2*height,2*height);

@@ -295,6 +295,13 @@ MASCP.Service.prototype.requestComplete = function()
     bean.fire(MASCP.Service,'requestComplete',[this]);
 };
 
+MASCP.Service.prototype.requestIncomplete = function()
+{
+    bean.fire(this,'requestIncomplete');
+    bean.fire(MASCP.Service,'requestIncomplete',[this]);
+};
+
+
 MASCP.Service.registeredLayers = function(service) {
     var result = [];
     for (var layname in MASCP.layers) {
@@ -410,8 +417,17 @@ var do_request = function(request_data) {
         request.setRequestHeader('User-Agent',request.customUA);
     }
     
+    var redirect_counts = 5;
+
     request.onreadystatechange = function(evt) {
         if (request.readyState == 4) {
+            if (request.status >= 300 && request.status < 400 && redirect_counts > 0) {
+                var loc = (request.getResponseHeader('location')).replace(/location:\s+/,'');
+                redirect_counts = redirect_counts - 1;
+                request.open('GET',loc,request_data.async);
+                request.send();
+                return;
+            }
             if (request.status == 200) {
                 var data_block;
                 if (request_data.dataType == 'xml') {
@@ -421,7 +437,8 @@ var do_request = function(request_data) {
                 }
                 try {
                     var text = request.responseText;
-                    data_block = request_data.dataType == 'xml' ? request.responseXML || MASCP.importNode(request.responseText) : JSON.parse(request.responseText);
+                    data_block = request_data.dataType == 'xml' ? request.responseXML || MASCP.importNode(request.responseText) :
+                                 request_data.dataType == 'txt' ? request.responseText : JSON.parse(request.responseText);
                 } catch (e) {
                     if (e.type == 'unexpected_eos') {
                         request_data.success.call(null,{},request.status,request);
@@ -521,6 +538,9 @@ base.retrieve = function(agi,callback)
 
     if (agi && callback) {
         this.agi = agi;
+
+        this.result = null;
+        
         var done_result = false;
         var done_func = function(err) {
             bean.remove(self,"resultReceived",done_func);
@@ -565,10 +585,17 @@ base.retrieve = function(agi,callback)
                         self.requestComplete();
                         return;
                     }
-                    if (self._dataReceived(data,status)) {
+                    var received_flag = self._dataReceived(data,status);
+
+                    if (received_flag) {
                         self.gotResult();
                     }
-                    self.requestComplete();
+
+                    if (received_flag !== null && typeof received_flag !== 'undefined') {
+                        self.requestComplete();
+                    } else {
+                        self.requestIncomplete();
+                    }
                 }
     };
     MASCP.extend(default_params,request_data);
@@ -645,15 +672,28 @@ base.retrieve = function(agi,callback)
             get_db_data(id,self.toString(),function(err,data) {
                 if (data) {
                     if (cback) {
-                        bean.add(self,"resultReceived",function() {
-                            bean.remove(self,"resultReceived",arguments.callee);
-                            cback.call(self);
-                        });
+                        self.result = null;
+                        var done_func = function(err) {
+                            bean.remove(self,"resultRecieved",arguments.callee);
+                            bean.remove(self,"error",arguments.callee);
+                            cback.call(self,err);
+                        };
+                        bean.add(self,"resultReceived",done_func);
+                        bean.add(self,"error", done_func);
                     }
-                    if (self._dataReceived(data,"db")) {
+
+                    var received_flag = self._dataReceived(data,"db");
+
+                    if (received_flag) {
                         self.gotResult();
                     }
-                    self.requestComplete();
+
+                    if (received_flag !== null) {
+                        self.requestComplete();
+                    } else {
+                        self.requestIncomplete();
+                    }
+
                 } else {
                     var old_received = self._dataReceived;
                     self._dataReceived = (function() { return function(dat) {
