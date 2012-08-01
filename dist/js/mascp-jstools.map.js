@@ -936,6 +936,10 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
             }
             
             if (p.x > viewBoxScale * min_x) {
+                /* Element has shifted too far to the right
+                   Induce some gravity towards the left side
+                   of the screen
+                */
                 targetElement._snapback = setTimeout(function() {
                     var evObj;
                     if (Math.abs(targetElement.currentTranslate.x - (viewBoxScale * min_x)) > 35 ) {
@@ -959,10 +963,8 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
                             evObj.initEvent('pan',false,true);
                             targetElement.dispatchEvent(evObj);
                         }
-                        if (document.createEvent && ! self.dragging) {
-                            evObj = document.createEvent('Events');
-                            evObj.initEvent('panend',false,true);
-                            targetElement.dispatchEvent(evObj);
+                        if (! self.dragging) {
+                            bean.fire(targetElement,'panend');
                         }
                         targetElement._snapback = null;
                     }
@@ -975,6 +977,9 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
                 min_val *= 0.90;
             }
             if (p.x < 0 && Math.abs(p.x) > min_val) {
+                /* Element has shifted too far to the left
+                   Induce some gravity to the right side of the screen
+                */
                 targetElement._snapback = setTimeout(function() {
                     var evObj;
                     
@@ -998,10 +1003,8 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
                             evObj.initEvent('pan',false,true);
                             targetElement.dispatchEvent(evObj);
                         }
-                        if (document.createEvent && ! self.dragging) {
-                            evObj = document.createEvent('Events');
-                            evObj.initEvent('panend',false,true);
-                            targetElement.dispatchEvent(evObj);
+                        if (! self.dragging) {
+                            bean.fire(targetElement,'panend');
                         }
                         targetElement._snapback = null;
                     }
@@ -1085,10 +1088,12 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
       evt.preventDefault(true);
       
       if (document.createEvent) {
-          var evObj = document.createEvent('Events');
-          evObj.initEvent('panstart',false,true);
-          targ.dispatchEvent(evObj);
-      }      
+          self.clicktimeout = setTimeout(function() {
+              var evObj = document.createEvent('Events');
+              evObj.initEvent('panstart',false,true);
+              targ.dispatchEvent(evObj);
+          },200);
+      }
 
     };
     
@@ -1115,6 +1120,9 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
     var mouseMove = function(evt) {
         this.style.cursor = 'url(http://maps.gstatic.com/intl/en_us/mapfiles/openhand_8_8.cur)';
         var positions = mousePosition(evt);
+        if (self.clicktimeout && Math.abs(positions[0] - self.oX) < 10 ) {
+            mouseUp();
+        }
         if (!self.dragging) {
            return;
         }
@@ -1190,6 +1198,10 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
     };
 
     var mouseUp = function(evt) { 
+      if (self.clicktimeout) {
+          clearTimeout(self.clicktimeout);
+          self.clicktimeout = null;
+      }
       if ( ! self.enabled ) {
           return true;
       }
@@ -1202,11 +1214,9 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
       
       var targ = self.targetElement ? self.targetElement : targetElement;      
       
-      if (document.createEvent && ! targ._snapback) {
-          var evObj = document.createEvent('Events');
-          evObj.initEvent('panend',false,true);
-          targ.dispatchEvent(evObj);
-      }      
+      if (! targ._snapback) {
+        bean.fire(targ,'panend',true);
+      }
     };
 
     var mouseOut = function(e) {
@@ -1373,7 +1383,8 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
         if (self.momentum) {
             window.clearTimeout(self.momentum);
         }
-        self.momentum = window.setTimeout(function() {
+        self.momentum = 1;
+        (function() {
             start = targ.getPosition()[0];
             if (self.dragging) {
                 start += self.oX - self.dX;
@@ -1393,7 +1404,7 @@ GOMap.Diagram.Dragger.prototype.applyToElement = function(targetElement) {
                 clearInterval(self._momentum_shrinker);
                 mouseUp(e);
             }
-        },50);
+        })();
     };
     
     targetElement.addEventListener('touchend',momentum_func,false);
