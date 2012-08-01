@@ -437,7 +437,7 @@ var SVGCanvas = SVGCanvas || (function() {
         };
 
         // Popup object to be attached to hover events on peptide objects (aka BoxOverlays)
-        canvas.popup = function(mouseX,mouseY,clientX,metadata) {
+        canvas.popup = function(mouseX,mouseY,clientX,popupData) {
             // Correct mouse cursor location
             var actualMouseX = mouseX - 7;
             var actualMouseY = mouseY - 130;
@@ -487,12 +487,12 @@ var SVGCanvas = SVGCanvas || (function() {
 
             // Initialize line counter k. SVG doesn't support wordwrap, so we'll do this manually
             var k = 0;
-            // Fill popup content from metadata argument
-            if (metadata) {
+            // Fill popup content from popupData argument
+            if (popupData) {
                 var textX = actualMouseX+offsetX+10;
                 //var textY = actualMouseY+offsetY+18;
-                // Title:Text pairs in metadata are comma-delimited; separate them now
-                var popupData = metadata.split(',');
+                // Title:Text pairs in popupData are comma-delimited; separate them now
+                var popupData = popupData.split(',');
                 lineHeight = 12;
                 lineLength = 38;
                 fontSize = '14px';
@@ -687,7 +687,7 @@ var SVGCanvas = SVGCanvas || (function() {
                 // this.setAttribute('height',height);
                 var scale_val = setHeight.call(this,height);
                 this.setAttribute('height',height);
-                var top_offset = this.offset;                
+                var top_offset = this.offset;
                 var widget_width = this.firstChild.firstChild.getBBox().width;
                 var widget_height = parseFloat(this.firstChild.firstChild.getAttribute('height'));
                 var centering_offset = 3/5*widget_height;
