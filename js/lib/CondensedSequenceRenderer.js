@@ -217,6 +217,37 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
             renderer._object = this;
             renderer._canvas = canv;
             renderer._canvas._canvas_height = 0;
+
+            // Track and store mouse cursor position in SVG canvas coordinates for the hover popup event
+            document.documentElement.addEventListener('mousemove',function(evt) {
+                // Here we address browser cross-compatibility issues
+                var posx = 0;
+                var posy = 0;
+                if (!evt) var evt = window.event;
+                if (evt.pageX || evt.pageY) 	{
+                    posx = evt.pageX;
+                    posy = evt.pageY;
+                }
+                else if (evt.clientX || evt.clientY) 	{
+                    posx = evt.clientX + document.body.scrollLeft
+                        + document.documentElement.scrollLeft;
+                    posy = evt.clientY + document.body.scrollTop
+                        + document.documentElement.scrollTop;
+                }
+                // Now posx and posy contain the mouse position relative to the document
+
+                // Create an SVGPoint object and transform its coordinates
+                var pt = canv.createSVGPoint();
+                pt.x = posx;
+                pt.y = posy;
+                
+                canv.cursorPos = pt;
+                
+                // Determine quadrant of mouse cursor and set popup offset accordingly
+                canv.clientX = evt.clientX;
+                
+            }, false);
+
             jQuery(renderer).trigger('svgready');
         },false);
     
@@ -658,6 +689,34 @@ var addElementToLayer = function(layerName) {
     return [tracer,tracer_marker,bobble];
 };
 
+// Function for mouseover events on peptide objects, aka BoxOverlays, to trigger hover popup
+var mouseOver = function(setting, target, canvas, metadata) {
+    if (setting == 'on') {
+        target.timerID = setTimeout( function() {
+            // Transform mouse cursor location to SVG canvas coordinates
+            canvas.cursorPos = canvas.cursorPos.matrixTransform(canvas.parentNode.getCTM().inverse());
+            // Create popup
+            target.popup = canvas.popup(canvas.cursorPos.x, canvas.cursorPos.y, canvas.clientX, metadata);
+            bean.add(target.popup, 'mouseenter', function() { canvas.withinPopup = true; });
+            bean.add(target.popup, 'mouseleave', function() {
+                canvas.withinPopup = false;
+                setTimeout( function() {
+                    // Test for presence of popup and mouseover in the popup itself before removing
+                    if ('popup' in canvas.parentNode.childNodes && ! canvas.withinPopup === true) { canvas.parentNode.removeChild(target.popup); }
+                }, 100); 
+            });
+        }, 500);
+    }
+    if (setting == 'off') {
+        if (target.timerID) { clearTimeout(target.timerID); }
+        // Test for presence of a popup and a mouseover event in the popup itself before removing
+        setTimeout( function() {
+            if ('popup' in canvas.parentNode.childNodes && ! canvas.withinPopup === true) { canvas.parentNode.removeChild(target.popup); }
+        }, 20);
+    }
+    return;
+};
+
 var addBoxOverlayToElement = function(layerName,width,fraction) {
     
     if (typeof fraction == 'undefined') {
@@ -677,24 +736,80 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
         return;
     }
 
-
+    var peptideSequence = '';
+ 	var metadata = '';
     var rect =  canvas.rect(-0.25+this._index,60,width || 1,4);
+    rect.position_start = this._index;
+    rect.position_end = this._index + width;
+
     var rect_x = parseFloat(rect.getAttribute('x'));
     var rect_max_x = rect_x + parseFloat(rect.getAttribute('width'));
     var container = this._renderer._layer_containers[layerName];
+
+    var exitLoop = false;
+
+    // Loop through rect objects already in layer; if current peptide overlaps, combine
     for (var i = 0; i < container.length; i++) {
         var el_x = parseFloat(container[i].getAttribute('x'));
         var el_max_x = el_x + parseFloat(container[i].getAttribute('width'));
-        if ((el_x <= rect_x && rect_x <= el_max_x) ||
-            (rect_x <= el_x && el_x <= rect_max_x)) {
-                if (container[i].style.opacity != fraction) {
-                    continue;
-                }
-                container[i].setAttribute('x', ""+Math.min(el_x,rect_x));
-                container[i].setAttribute('width', ""+(Math.max(el_max_x,rect_max_x)-Math.min(el_x,rect_x)) );
-                rect.parentNode.removeChild(rect);
-                return container[i];
+        if ((el_x <= rect_x && rect_x <= el_max_x) || (rect_x <= el_x && el_x <= rect_max_x)) {
+            if (container[i].style.opacity != fraction) {
+                continue;
             }
+            // Update rect object position and size
+            var newX = Math.min(el_x,rect_x);
+            var newWidth = Math.max(el_max_x,rect_max_x)-Math.min(el_x,rect_x);
+            container[i].setAttribute('x', ""+newX);
+            container[i].setAttribute('width', ""+newWidth);
+
+            // Update peptide sequence indeces
+            var newStart = Math.min(container[i].position_start,this._index);
+            var newEnd = Math.max(container[i].position_end,this._index+width);
+            container[i].position_start = newStart;
+            container[i].position_end = newEnd;
+            peptideSequence = this._renderer.sequence.slice(newStart, newEnd);
+            metadata = 'Sequence:' + peptideSequence;
+
+            // Bind mouseOver function with updated sequence information
+            bean.remove(container[i], 'mouseenter');
+            bean.add(container[i], 'mouseenter', function() { mouseOver('on', container[i], canvas, metadata); });
+            rect.parentNode.removeChild(rect);
+            
+            // Check other box overlay objects for additional overlap
+            var noOverlap = false;
+            var persistentBoxOverlay = container[i];
+            do {
+                for (var j = 0; j < container.length; j++) {
+                    var el_x_2 = parseFloat(container[j].getAttribute('x'));
+                    var el_max_x_2 = el_x_2 + parseFloat(container[j].getAttribute('width'));
+                    if (((el_x_2 <= newX && newX <= el_max_x_2) || (newX <= el_x_2 && el_x_2 <= (newX+newWidth) )) && !(el_x_2 == newX && el_max_x_2 == newX+newWidth)) {
+                        // Update rect object position and size
+                        newX = Math.min(el_x_2,newX);
+                        newWidth = Math.max(el_max_x_2,(newX+newWidth))-Math.min(el_x_2,newX);
+                        persistentBoxOverlay.setAttribute('x', ""+newX);
+                        persistentBoxOverlay.setAttribute('width', ""+newWidth);
+
+                        // Update peptide sequence indeces
+                        newStart = Math.min(persistentBoxOverlay.position_start,container[j].position_start);
+                        newEnd = Math.max(persistentBoxOverlay.position_end,container[j].position_end);
+                        persistentBoxOverlay.position_start = newStart;
+                        persistentBoxOverlay.position_end = newEnd;
+                        peptideSequence = this._renderer.sequence.slice(newStart, newEnd);
+                        metadata = 'Sequence:' + peptideSequence;
+
+                        // Bind mouseOver function with updated sequence information
+                        bean.remove(persistentBoxOverlay, 'mouseenter');
+                        bean.add(persistentBoxOverlay, 'mouseenter', function() { mouseOver('on', persistentBoxOverlay, canvas, metadata); });
+                        // Remove redundant BoxOverlay
+                        container.splice(j, 1);
+                        j = 0;
+                    }
+                    else if (j + 1 == container.length) { noOverlap = true; }
+                }
+            } while (noOverlap == false);
+            
+            return persistentBoxOverlay;
+        }
     }
     this._renderer._layer_containers[layerName].push(rect);
     rect.setAttribute('class',layerName);
@@ -702,8 +817,14 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     rect.setAttribute('visibility', 'hidden');
     rect.style.opacity = fraction;
     rect.setAttribute('fill',MASCP.layers[layerName].color);
-    rect.position_start = this._index;
-    rect.position_end = this._index + width;
+    rect.setAttribute('cursor','default');
+
+    // Bind mouseOver function to peptide objects
+    peptideSequence = this._renderer.sequence.slice(this._index, this._index+width);
+    metadata = 'Sequence:' + peptideSequence;
+    bean.add(rect, 'mouseenter', function() { mouseOver('on', rect, canvas, metadata); });
+    bean.add(rect, 'mouseleave', function() { mouseOver('off', rect, canvas, metadata); });
+
     return rect;
 };
 

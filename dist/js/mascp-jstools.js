@@ -4029,7 +4029,6 @@ if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
 }
 
-
 /** Default class constructor
  *  @class      Service class that will retrieve data from Rippdb for a given AGI.
  *  @param      {String} agi            Agi to look up
@@ -5582,6 +5581,7 @@ if ( typeof MASCP == 'undefined' ) {
     }
 }
 
+
 /**
  *  @lends MASCP.Group.prototype
  *  @property   {String}        name                        Name for this group to be used as an identifier
@@ -7026,7 +7026,10 @@ var SVGCanvas = SVGCanvas || (function() {
         var curr_scale = scale_re.exec(curr_transform);
     
         var curr_height = parseFloat(this.getAttribute('height') || 1);
-    
+        // console.log("curr height is "+curr_height);
+        // console.log("target height is "+height);
+        // console.log("current scale is "+curr_scale[1]);
+        // console.log(curr_transform);
         var new_scale = 1;
         if (curr_scale === null) {
             curr_transform += ' scale(1) ';
@@ -7035,8 +7038,8 @@ var SVGCanvas = SVGCanvas || (function() {
             curr_scale = parseFloat(curr_scale[1]);
         }
         new_scale = ( parseFloat(height) / curr_height ) * curr_scale;
-    
         curr_transform = curr_transform.replace(scale_re,'scale('+new_scale+')');
+        // console.log(curr_transform);
 
         this.setAttribute('transform',curr_transform);
         this.setAttribute('height',height);
@@ -7044,7 +7047,7 @@ var SVGCanvas = SVGCanvas || (function() {
     };
 
     return (function(canvas) {
-
+        
         var RS = canvas.RS || DEFAULT_RS;
         canvas.RS = RS;
         
@@ -7128,98 +7131,136 @@ var SVGCanvas = SVGCanvas || (function() {
         };
 
         canvas.rect = function(x,y,width,height) {
-            var a_rect = document.createElementNS(svgns,'rect');
-            a_rect.setAttribute('x', typeof x == 'string' ? x : x * RS);
-            a_rect.setAttribute('y', typeof y == 'string' ? y : y * RS);
-            a_rect.setAttribute('width', typeof width == 'string' ? width : width * RS);
-            a_rect.setAttribute('height', typeof height == 'string' ? height : height * RS);
-            a_rect.setAttribute('stroke','#000000');
+          var a_rect = document.createElementNS(svgns,'rect');
+          a_rect.setAttribute('x', typeof x == 'string' ? x : x * RS);
+          a_rect.setAttribute('y', typeof y == 'string' ? y : y * RS);
+          a_rect.setAttribute('width', typeof width == 'string' ? width : width * RS);
+          a_rect.setAttribute('height', typeof height == 'string' ? height : height * RS);
+          a_rect.setAttribute('stroke','#000000');
     //      a_rect.setAttribute('shape-rendering','optimizeSpeed');
-            this.appendChild(a_rect);
-            return a_rect;
+          this.appendChild(a_rect);
+          return a_rect;
         };
-        
+
         // Popup object to be attached to hover events on peptide objects (aka BoxOverlays)
         canvas.popup = function(mouseX,mouseY,clientX,metadata) {
-            // Set offset of popup from current mouse cursor location
-            var offsetY = -250;
+            // Correct mouse cursor location
+            var actualMouseX = mouseX - 7;
+            var actualMouseY = mouseY - 130;
+
+            // Set popup location relative to mouse cursor
+            //var offsetY = -100;
             if ( clientX >= window.innerWidth / 2 ) {
-                var offsetX = -460;
-                var polyOffsetX = offsetX + 400;
+                var offsetX = -370;
+                var polyOffsetX = -20;
             }
             else {
-                var offsetX = 60;
-                var polyOffsetX = offsetX;
+                var offsetX = 20;
+                var polyOffsetX = 20;
             }
+
             // Create container for popup
             var a_popup = document.createElementNS(svgns,'g');
             a_popup.setAttribute('id','popup');
             // Create main popup body
             var popup_rect = document.createElementNS(svgns, 'rect');
-            popup_rect.setAttribute('x', mouseX+offsetX);
-            popup_rect.setAttribute('y', mouseY+offsetY);
-            popup_rect.setAttribute('width', 400);
-            popup_rect.setAttribute('height', 200);
-            popup_rect.setAttribute('rx', 30);
-            popup_rect.setAttribute('ry', 30);
+            popup_rect.setAttribute('x', actualMouseX+offsetX);
+            //popup_rect.setAttribute('y', actualMouseY+offsetY);
+            popup_rect.setAttribute('width', 350);
+            //popup_rect.setAttribute('height', 200);
+            popup_rect.setAttribute('rx', 10);
+            popup_rect.setAttribute('ry', 10);
             popup_rect.setAttribute('stroke','#000000');
             popup_rect.setAttribute('stroke-width',2);
             popup_rect.setAttribute('fill','#ffffff');
             a_popup.appendChild(popup_rect);
+
             // Create arrow from mouse location to popup body
             var popup_poly = document.createElementNS(svgns, 'polygon');
-            var polyX = (mouseX+polyOffsetX)
-            popup_poly.setAttribute('points',mouseX+','+(mouseY-125)+' '+polyX+','+(mouseY-140)+' '+polyX+','+(mouseY-100));
+            var polyX = (actualMouseX+polyOffsetX);
+            popup_poly.setAttribute('points',(actualMouseX)+','+(actualMouseY)+' '+polyX+','+(actualMouseY-10)+' '+polyX+','+(actualMouseY+10));
             popup_poly.setAttribute('stroke','#000000');
             popup_poly.setAttribute('stroke-width',2);
             popup_poly.setAttribute('fill','#ffffff');
             a_popup.appendChild(popup_poly);
+
             // Cover up black line at intersection of popup_rect and popup_poly
             var popup_line = document.createElementNS(svgns, 'polyline');
-            popup_line.setAttribute('points',(polyX)+','+(mouseY-139)+' '+(polyX)+','+(mouseY-101));
+            popup_line.setAttribute('points',(polyX)+','+(actualMouseY-9)+' '+(polyX)+','+(actualMouseY+9));
             popup_line.setAttribute('stroke','#ffffff');
             popup_line.setAttribute('stroke-width',3);
             a_popup.appendChild(popup_line);
+
+            // Initialize line counter k. SVG doesn't support wordwrap, so we'll do this manually
+            var k = 0;
             // Fill popup content from metadata argument
             if (metadata) {
-                var textX = mouseX+offsetX+15;
-                var textY = mouseY+offsetY+25;
+                var textX = actualMouseX+offsetX+10;
+                //var textY = actualMouseY+offsetY+18;
                 // Title:Text pairs in metadata are comma-delimited; separate them now
                 var popupData = metadata.split(',');
-                // For each Title:Text pair, create text and tspan elements
-                // Initialize line counter k. SVG doesn't support wordwrap, so we'll do this manually
-                k = 0;
                 lineHeight = 12;
                 lineLength = 38;
                 fontSize = '14px';
+
+                // Create main text container
+                var popupTextContainer = document.createElementNS(svgns, 'text');
+                popupTextContainer.setAttribute('x', textX);
+                //popupTextContainer.setAttribute('y', textY);
+                popupTextContainer.setAttribute('font-family','monospace');
+                popupTextContainer.setAttribute('font-size',fontSize);
+                popupTextContainer.setAttribute('pointer-events','visiblePainted');
+                a_popup.appendChild(popupTextContainer);
+
                 // Iterate over data to be displayed
+                var firstTitle = true;
                 for (i = 0; i < popupData.length; i++) {
                     var newPopupElData = popupData[i].split(':');
-                    var newPopupElTitle = document.createElementNS(svgns, 'text');
+                    var newPopupElTitle = document.createElementNS(svgns, 'tspan');
                     newPopupElTitle.textContent = newPopupElData[0] + ': ';
                     newPopupElTitle.setAttribute('x', textX);
-                    newPopupElTitle.setAttribute('y', textY+(k*lineHeight));
-                    newPopupElTitle.setAttribute('font-family','monospace');
-                    newPopupElTitle.setAttribute('font-size',fontSize);
-                    a_popup.appendChild(newPopupElTitle);
-                    var contentLength = lineLength - newPopupElData[0].length;
-                    var newPopupElContent = [];
-                    var newPopupElText = document.createElementNS(svgns, 'text');
-                    newPopupElText.setAttribute('font-family','monospace');
-                    newPopupElText.setAttribute('font-size',fontSize);
-                    newPopupElText.setAttribute('pointer-events','visiblePainted');
+                    newPopupElTitle.setAttribute('dy', (firstTitle == true ? 0 : lineHeight+4));
+                    popupTextContainer.appendChild(newPopupElTitle);
+                    // titleLength is in characters; titleWidth is in pixels
+                    var titleLength = newPopupElData[0].length;
+                    var titleWidth = (titleLength * 8) + 16;
+                    var contentLength = lineLength - titleLength;
                     // Split text into multiple lines
-                    for (j = 0; j*contentLength < newPopupElData[1].length; j++) {
+                    var firstLine = true;
+                    var contentWritten = 0;
+                    var contentSize = newPopupElData[1].length;
+                    var lastIndex = 0;
+                    while (lastIndex < contentSize) {
                         var newPopupElLine = document.createElementNS(svgns, 'tspan');
-                        newPopupElLine.setAttribute('x',textX+80);
-                        newPopupElLine.setAttribute('y',textY+(k*lineHeight));
-                        newPopupElLine.textContent = newPopupElData[1].substring(j*contentLength, (j+1)*contentLength);
-                        newPopupElText.appendChild(newPopupElLine);
+                        newPopupElLine.setAttribute('x', textX+titleWidth);
+                        newPopupElLine.setAttribute('dy',(firstLine == true ? 0 : lineHeight));
+                        var thisLineLength = 0;
+                        if (lastIndex + contentLength >= contentSize) {
+                            thisLineLength = contentLength;
+                        } else {
+                            // Check for spaces and preserve whole words if present
+                            for (var l = contentLength; l > 0; l--) {
+                                var searchIndex = lastIndex + l;
+                                if (newPopupElData[1].substring(searchIndex, searchIndex+1) == ' ') { break; }
+                            }
+                            thisLineLength = (l == 0 ? contentLength : l);
+                        }
+                        newPopupElLine.textContent = newPopupElData[1].substring(lastIndex, lastIndex+thisLineLength).trim();
+                        lastIndex += thisLineLength;
+                        popupTextContainer.appendChild(newPopupElLine);
+                        if (firstLine == true) { firstLine = false; }
                         k++;
                     }
-                    a_popup.appendChild(newPopupElText);
+                    if (firstTitle == true) { firstTitle = false; }
                 }
             }
+
+            // Set size and y-position based on amount of text displayed
+            var popupHeight = (k * 12) + ((popupData.length-1) * 4) + 30;
+            popup_rect.setAttribute('height', popupHeight);
+            popupTextContainer.setAttribute('y', actualMouseY-(popupHeight/2)+20);
+            popup_rect.setAttribute('y', actualMouseY-(popupHeight/2));
+
             this.parentNode.appendChild(a_popup);
             return a_popup;
         };
@@ -7617,7 +7658,8 @@ var SVGCanvas = SVGCanvas || (function() {
         };
     });
 
-})();/**
+})();
+/**
  *  @fileOverview   Basic classes and definitions for an SVG-based sequence renderer
  */
 
@@ -7794,7 +7836,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
 
 
 
-            canv.setCurrentTranslateXY = function(x,y) {
+           canv.setCurrentTranslateXY = function(x,y) {
                     var curr_transform = (group.getAttribute('transform') || '').replace(/translate\([^\)]+\)/,'');
                     curr_transform = curr_transform + ' translate('+x+', '+y+') ';
                     group.setAttribute('transform',curr_transform);
@@ -7833,11 +7875,10 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
             container_canv.setAttribute('width','100%');
             container_canv.setAttribute('height','100%');
             canv.appendChild(canv.makeEl('rect', {'x':0,'y':0,'width':'100%','height':'100%','stroke-width':'0','fill':'#ffffff'}));
-            
             renderer._object = this;
             renderer._canvas = canv;
             renderer._canvas._canvas_height = 0;
-            
+
             // Track and store mouse cursor position in SVG canvas coordinates for the hover popup event
             document.documentElement.addEventListener('mousemove',function(evt) {
                 // Here we address browser cross-compatibility issues
@@ -7867,13 +7908,13 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
                 canv.clientX = evt.clientX;
                 
             }, false);
- 
+
             jQuery(renderer).trigger('svgready');
         },false);
-     
+    
         return canvas;
     };
-    
+
     var addNav = function(nav_canvas) {
         this.navigation = new MASCP.CondensedSequenceRenderer.Navigation(nav_canvas,this);
         var nav = this.navigation;
@@ -8156,7 +8197,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
         });
     
         var canvas = createCanvasObject.call(this);
- 
+    
         if (this._canvas) {
             has_canvas = true;
         } else {
@@ -8323,7 +8364,7 @@ var mouseOver = function(setting, target, canvas, metadata) {
                 setTimeout( function() {
                     // Test for presence of popup and mouseover in the popup itself before removing
                     if ('popup' in canvas.parentNode.childNodes && ! canvas.withinPopup === true) { canvas.parentNode.removeChild(target.popup); }
-                }, 20); 
+                }, 100); 
             });
         }, 500);
     }
@@ -8355,50 +8396,96 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
         log("Delaying rendering, waiting for sequence change");
         return;
     }
-    
+
     var peptideSequence = '';
-    var metadata = '';
-    var rect = canvas.rect(-0.25+this._index,60,width || 1,4);
+ 	var metadata = '';
+    var rect =  canvas.rect(-0.25+this._index,60,width || 1,4);
+    rect.position_start = this._index;
+    rect.position_end = this._index + width;
+
     var rect_x = parseFloat(rect.getAttribute('x'));
     var rect_max_x = rect_x + parseFloat(rect.getAttribute('width'));
     var container = this._renderer._layer_containers[layerName];
-    
+
+    var exitLoop = false;
 
     // Loop through rect objects already in layer; if current peptide overlaps, combine
     for (var i = 0; i < container.length; i++) {
         var el_x = parseFloat(container[i].getAttribute('x'));
         var el_max_x = el_x + parseFloat(container[i].getAttribute('width'));
-        if ((el_x <= rect_x && rect_x <= el_max_x) ||
-            (rect_x <= el_x && el_x <= rect_max_x)) {
-                if (container[i].style.opacity != fraction) {
-                    continue;
-                }
-                container[i].setAttribute('x', ""+Math.min(el_x,rect_x));
-                container[i].setAttribute('width', ""+(Math.max(el_max_x,rect_max_x)-Math.min(el_x,rect_x)) );
-                peptideSequence = this._renderer.sequence.slice(Math.min(container[i].position_start,this._index), Math.max(container[i].position_end,this._index+width));
-                metadata = 'Sequence:' + peptideSequence;
-                bean.remove(container[i], 'mouseenter');
-                bean.add(container[i], 'mouseenter', function() { mouseOver('on', container[i], canvas, metadata); });
-                rect.parentNode.removeChild(rect);
-                return container[i];
+        if ((el_x <= rect_x && rect_x <= el_max_x) || (rect_x <= el_x && el_x <= rect_max_x)) {
+            if (container[i].style.opacity != fraction) {
+                continue;
             }
-    }
+            // Update rect object position and size
+            var newX = Math.min(el_x,rect_x);
+            var newWidth = Math.max(el_max_x,rect_max_x)-Math.min(el_x,rect_x);
+            container[i].setAttribute('x', ""+newX);
+            container[i].setAttribute('width', ""+newWidth);
 
+            // Update peptide sequence indeces
+            var newStart = Math.min(container[i].position_start,this._index);
+            var newEnd = Math.max(container[i].position_end,this._index+width);
+            container[i].position_start = newStart;
+            container[i].position_end = newEnd;
+            peptideSequence = this._renderer.sequence.slice(newStart, newEnd);
+            metadata = 'Sequence:' + peptideSequence;
+
+            // Bind mouseOver function with updated sequence information
+            bean.remove(container[i], 'mouseenter');
+            bean.add(container[i], 'mouseenter', function() { mouseOver('on', container[i], canvas, metadata); });
+            rect.parentNode.removeChild(rect);
+            
+            // Check other box overlay objects for additional overlap
+            var noOverlap = false;
+            var persistentBoxOverlay = container[i];
+            do {
+                for (var j = 0; j < container.length; j++) {
+                    var el_x_2 = parseFloat(container[j].getAttribute('x'));
+                    var el_max_x_2 = el_x_2 + parseFloat(container[j].getAttribute('width'));
+                    if (((el_x_2 <= newX && newX <= el_max_x_2) || (newX <= el_x_2 && el_x_2 <= (newX+newWidth) )) && !(el_x_2 == newX && el_max_x_2 == newX+newWidth)) {
+                        // Update rect object position and size
+                        newX = Math.min(el_x_2,newX);
+                        newWidth = Math.max(el_max_x_2,(newX+newWidth))-Math.min(el_x_2,newX);
+                        persistentBoxOverlay.setAttribute('x', ""+newX);
+                        persistentBoxOverlay.setAttribute('width', ""+newWidth);
+
+                        // Update peptide sequence indeces
+                        newStart = Math.min(persistentBoxOverlay.position_start,container[j].position_start);
+                        newEnd = Math.max(persistentBoxOverlay.position_end,container[j].position_end);
+                        persistentBoxOverlay.position_start = newStart;
+                        persistentBoxOverlay.position_end = newEnd;
+                        peptideSequence = this._renderer.sequence.slice(newStart, newEnd);
+                        metadata = 'Sequence:' + peptideSequence;
+
+                        // Bind mouseOver function with updated sequence information
+                        bean.remove(persistentBoxOverlay, 'mouseenter');
+                        bean.add(persistentBoxOverlay, 'mouseenter', function() { mouseOver('on', persistentBoxOverlay, canvas, metadata); });
+                        // Remove redundant BoxOverlay
+                        container.splice(j, 1);
+                        j = 0;
+                    }
+                    else if (j + 1 == container.length) { noOverlap = true; }
+                }
+            } while (noOverlap == false);
+            
+            return persistentBoxOverlay;
+        }
+    }
     this._renderer._layer_containers[layerName].push(rect);
     rect.setAttribute('class',layerName);
     rect.style.strokeWidth = '0px';
     rect.setAttribute('visibility', 'hidden');
     rect.style.opacity = fraction;
     rect.setAttribute('fill',MASCP.layers[layerName].color);
-    
+    rect.setAttribute('cursor','default');
+
     // Bind mouseOver function to peptide objects
     peptideSequence = this._renderer.sequence.slice(this._index, this._index+width);
     metadata = 'Sequence:' + peptideSequence;
     bean.add(rect, 'mouseenter', function() { mouseOver('on', rect, canvas, metadata); });
     bean.add(rect, 'mouseleave', function() { mouseOver('off', rect, canvas, metadata); });
 
-    rect.position_start = this._index;
-    rect.position_end = this._index + width;
     return rect;
 };
 
@@ -12201,7 +12288,7 @@ GOMap.Diagram.addZoomControls = function(zoomElement,min,max,precision,value) {
     min = min || 0;
     max = max || 10;
     precision = precision || 0.5;
-    value = value || zoomElement.zoom || min;
+    value = value || zoomElement.zoom || min; 
     
     var controls_container = document.createElement('div');
     
@@ -12215,7 +12302,7 @@ GOMap.Diagram.addZoomControls = function(zoomElement,min,max,precision,value) {
     reset.setAttribute('type','button');
     reset.setAttribute('value','Reset');
 
-    controls_container.appendChild(reset);
+    controls_container.appendChild(reset);    
 
     reset.addEventListener('click',function() {
         zoomElement.zoom = zoomElement.defaultZoom || value;
@@ -12225,7 +12312,7 @@ GOMap.Diagram.addZoomControls = function(zoomElement,min,max,precision,value) {
     range.setAttribute('min',min);
     range.setAttribute('max',max);
     range.setAttribute('step',precision);
-    range.setAttribute('value',value);
+    range.setAttribute('value',value); 
     range.setAttribute('type','range');
     range.setAttribute('style','-webkit-appearance: slider-horizontal; width: 100%; position: absolute; top: 0px; bottom: 0px; margin-top: 0.5em; left: 100%; margin-left: -0.5em;');
 
