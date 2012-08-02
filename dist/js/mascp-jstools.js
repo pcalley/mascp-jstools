@@ -7149,7 +7149,6 @@ var SVGCanvas = SVGCanvas || (function() {
             var actualMouseY = mouseY - 130;
 
             // Set popup location relative to mouse cursor
-            //var offsetY = -100;
             if ( clientX >= window.innerWidth / 2 ) {
                 var offsetX = -370;
                 var polyOffsetX = -20;
@@ -7165,9 +7164,7 @@ var SVGCanvas = SVGCanvas || (function() {
             // Create main popup body
             var popup_rect = document.createElementNS(svgns, 'rect');
             popup_rect.setAttribute('x', actualMouseX+offsetX);
-            //popup_rect.setAttribute('y', actualMouseY+offsetY);
             popup_rect.setAttribute('width', 350);
-            //popup_rect.setAttribute('height', 200);
             popup_rect.setAttribute('rx', 10);
             popup_rect.setAttribute('ry', 10);
             popup_rect.setAttribute('stroke','#000000');
@@ -7193,12 +7190,11 @@ var SVGCanvas = SVGCanvas || (function() {
 
             // Initialize line counter k. SVG doesn't support wordwrap, so we'll do this manually
             var k = 0;
+            // Initialize title counter l
+            var m = 0;
             // Fill popup content from popupData argument
             if (popupData) {
                 var textX = actualMouseX+offsetX+10;
-                //var textY = actualMouseY+offsetY+18;
-                // Title:Text pairs in popupData are comma-delimited; separate them now
-                var popupData = popupData.split(',');
                 lineHeight = 12;
                 lineLength = 38;
                 fontSize = '14px';
@@ -7206,7 +7202,6 @@ var SVGCanvas = SVGCanvas || (function() {
                 // Create main text container
                 var popupTextContainer = document.createElementNS(svgns, 'text');
                 popupTextContainer.setAttribute('x', textX);
-                //popupTextContainer.setAttribute('y', textY);
                 popupTextContainer.setAttribute('font-family','monospace');
                 popupTextContainer.setAttribute('font-size',fontSize);
                 popupTextContainer.setAttribute('pointer-events','visiblePainted');
@@ -7214,21 +7209,22 @@ var SVGCanvas = SVGCanvas || (function() {
 
                 // Iterate over data to be displayed
                 var firstTitle = true;
-                for (i = 0; i < popupData.length; i++) {
-                    var newPopupElData = popupData[i].split(':');
+                for (var popupKey in popupData) {
+                    m++;
+                    var popupValue = new String(popupData[popupKey]);
                     var newPopupElTitle = document.createElementNS(svgns, 'tspan');
-                    newPopupElTitle.textContent = newPopupElData[0] + ': ';
+                    newPopupElTitle.textContent = popupKey + ': ';
                     newPopupElTitle.setAttribute('x', textX);
                     newPopupElTitle.setAttribute('dy', (firstTitle == true ? 0 : lineHeight+4));
                     popupTextContainer.appendChild(newPopupElTitle);
                     // titleLength is in characters; titleWidth is in pixels
-                    var titleLength = newPopupElData[0].length;
+                    var titleLength = popupKey.length;
                     var titleWidth = (titleLength * 8) + 16;
                     var contentLength = lineLength - titleLength;
                     // Split text into multiple lines
                     var firstLine = true;
                     var contentWritten = 0;
-                    var contentSize = newPopupElData[1].length;
+                    var contentSize = popupValue.length;
                     var lastIndex = 0;
                     while (lastIndex < contentSize) {
                         var newPopupElLine = document.createElementNS(svgns, 'tspan');
@@ -7241,11 +7237,11 @@ var SVGCanvas = SVGCanvas || (function() {
                             // Check for spaces and preserve whole words if present
                             for (var l = contentLength; l > 0; l--) {
                                 var searchIndex = lastIndex + l;
-                                if (newPopupElData[1].substring(searchIndex, searchIndex+1) == ' ') { break; }
+                                if (popupValue.substring(searchIndex, searchIndex+1) == ' ') { break; }
                             }
                             thisLineLength = (l == 0 ? contentLength : l);
                         }
-                        newPopupElLine.textContent = newPopupElData[1].substring(lastIndex, lastIndex+thisLineLength).trim();
+                        newPopupElLine.textContent = popupValue.substring(lastIndex, lastIndex+thisLineLength).trim();
                         lastIndex += thisLineLength;
                         popupTextContainer.appendChild(newPopupElLine);
                         if (firstLine == true) { firstLine = false; }
@@ -7256,7 +7252,7 @@ var SVGCanvas = SVGCanvas || (function() {
             }
 
             // Set size and y-position based on amount of text displayed
-            var popupHeight = (k * 12) + ((popupData.length-1) * 4) + 30;
+            var popupHeight = (k * 12) + ((m>=1 ? m-1 : 0) * 4) + 30;
             popup_rect.setAttribute('height', popupHeight);
             popupTextContainer.setAttribute('y', actualMouseY-(popupHeight/2)+20);
             popup_rect.setAttribute('y', actualMouseY-(popupHeight/2));
@@ -8398,7 +8394,8 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     }
 
     var peptideSequence = '';
-    var popupData = '';
+    // Initialize object literal that passes data to popup
+    var popupData = {};
     var rect =  canvas.rect(-0.25+this._index,60,width || 1,4);
     rect.position_start = this._index;
     rect.position_end = this._index + width;
@@ -8429,7 +8426,7 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
             container[i].position_start = newStart;
             container[i].position_end = newEnd;
             peptideSequence = this._renderer.sequence.slice(newStart, newEnd);
-            popupData = 'Sequence:' + peptideSequence;
+            popupData['Sequence'] = peptideSequence;
 
             // Bind mouseOver function with updated sequence information
             bean.remove(container[i], 'mouseenter');
@@ -8456,7 +8453,7 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
                         persistentBoxOverlay.position_start = newStart;
                         persistentBoxOverlay.position_end = newEnd;
                         peptideSequence = this._renderer.sequence.slice(newStart, newEnd);
-                        popupData = 'Sequence:' + peptideSequence;
+                        popupData['Sequence'] = peptideSequence;
 
                         // Bind mouseOver function with updated sequence information
                         bean.remove(persistentBoxOverlay, 'mouseenter');
@@ -8482,7 +8479,7 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
 
     // Bind mouseOver function to peptide objects
     peptideSequence = this._renderer.sequence.slice(this._index, this._index+width);
-    popupData = 'Sequence:' + peptideSequence;
+    popupData['Sequence'] = peptideSequence;
     bean.add(rect, 'mouseenter', function() { mouseOver('on', rect, canvas, popupData); });
     bean.add(rect, 'mouseleave', function() { mouseOver('off', rect, canvas, popupData); });
 

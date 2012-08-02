@@ -737,7 +737,8 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     }
 
     var peptideSequence = '';
-    var popupData = '';
+    // Initialize object literal that passes data to popup
+    var popupData = {};
     var rect =  canvas.rect(-0.25+this._index,60,width || 1,4);
     rect.position_start = this._index;
     rect.position_end = this._index + width;
@@ -768,7 +769,7 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
             container[i].position_start = newStart;
             container[i].position_end = newEnd;
             peptideSequence = this._renderer.sequence.slice(newStart, newEnd);
-            popupData = 'Sequence:' + peptideSequence;
+            popupData['Sequence'] = peptideSequence;
 
             // Bind mouseOver function with updated sequence information
             bean.remove(container[i], 'mouseenter');
@@ -795,7 +796,7 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
                         persistentBoxOverlay.position_start = newStart;
                         persistentBoxOverlay.position_end = newEnd;
                         peptideSequence = this._renderer.sequence.slice(newStart, newEnd);
-                        popupData = 'Sequence:' + peptideSequence;
+                        popupData['Sequence'] = peptideSequence;
 
                         // Bind mouseOver function with updated sequence information
                         bean.remove(persistentBoxOverlay, 'mouseenter');
@@ -821,7 +822,7 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
 
     // Bind mouseOver function to peptide objects
     peptideSequence = this._renderer.sequence.slice(this._index, this._index+width);
-    popupData = 'Sequence:' + peptideSequence;
+    popupData['Sequence'] = peptideSequence;
     bean.add(rect, 'mouseenter', function() { mouseOver('on', rect, canvas, popupData); });
     bean.add(rect, 'mouseleave', function() { mouseOver('off', rect, canvas, popupData); });
 
