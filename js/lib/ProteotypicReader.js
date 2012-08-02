@@ -66,13 +66,20 @@ MASCP.ProteotypicReader.prototype.setupSequenceRenderer = function(sequenceRende
 
     this.bind('resultReceived', function() {
 
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['proteotypic'] = [];
+        var thesePeptides = this.result.getPeptides();
+        for (var k = 0; k < thesePeptides.length; k++) {
+            sequenceRenderer._peptide_sequences['proteotypic'].push(thesePeptides[k].sequence);
+        }
+
         MASCP.registerGroup('proteotypic_experimental', {'fullname' : 'Expected Peptides', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
         var overlay_name = 'proteotypic_controller';
 
         var css_block = '.active .overlay { background: #ff5533; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
 
-        MASCP.registerLayer(overlay_name,{ 'fullname' : 'Expected Peptides', 'color' : '#008000', 'css' : css_block });
+        MASCP.registerLayer(overlay_name,{ 'fullname' : 'Predicted Peptides', 'color' : '#008000', 'css' : css_block });
 
         if (sequenceRenderer.createGroupController) {
             sequenceRenderer.createGroupController('proteotypic_controller','proteotypic_experimental');

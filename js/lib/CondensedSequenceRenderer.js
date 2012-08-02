@@ -10,7 +10,7 @@
  */
 MASCP.CondensedSequenceRenderer = function(sequenceContainer) {
     this._RS = 50;
-    this._peptide_sequences = [];
+    this._peptide_sequences = {};
     MASCP.SequenceRenderer.apply(this,arguments);
     var self = this;
 
@@ -647,33 +647,69 @@ MASCP.CondensedSequenceRenderer.prototype.createModhunterLayer = function() {
 MASCP.CondensedSequenceRenderer.prototype.setModhunterGradient = function() {
 
     var sequence = this.sequence;
+    var seqLength = sequence.length;
 
     // Function to eliminate duplicate peptides from input array
     var sort_unique = function(arr) {
-        arr = arr.sort();
-        var ret = [arr[0]];
-        for (var i = 1; i < arr.length; i++) { // start loop at 1 as element 0 can never be a duplicate
-            if (arr[i-1] !== arr[i]) {
-                ret.push(arr[i]);
+        var ret = [];
+        if (arr.length > 0) {
+            arr = arr.sort();
+            ret.push(arr[0]);
+            for (var i = 1; i < arr.length; i++) { // start loop at 1 as element 0 can never be a duplicate
+                if (arr[i-1] !== arr[i]) {
+                    ret.push(arr[i]);
+                }
             }
         }
         return ret;
     };
 
-    // Function to find the indeces of areas in the sequence with no covereage
-    var findUncoveredRegions = function(arr) {
-        var coveredIndeces = [];
+    // Given an ordered set of consolidated indeces, find the indeces of the negative space
+    var invertIndeces = function(inputIndex) {
         var results = [];
-        var seqLength = sequence.length;
+        var inputLength = inputIndex.length;
+        for (var n = 0; n < inputLength; n++) {
+            if (n == 0 && inputIndex[n][0] > 0) { results.push([0, Math.max(inputIndex[n][0]-1,0)]); }
+            if (n == inputLength-1 && inputIndex[n][1] < inputLength-1) { results.push([Math.min(inputIndex[n][1]+1,sequence.length-1), sequence.length-1]); }
+            if (n != 0 && n != inputLength-1) { results.push([inputIndex[n-1][1]+1, inputIndex[n][0]-1]); }
+        }
 
-        // Function to convert indeces to percentages of total sequence length
-        var toPercent = function(indeces) {
-            var left = (indeces[0]/seqLength);
-            var right = (indeces[1]/seqLength);
+        return results;
+    };
 
-            // Adjust offsets for better alignment in GATOR
+    // Function to convert consolidated peptides to percentages for mod_gradient
+    var toPercent = function(indecesList) {
+        var results = [];
+
+        var convertIndeces = function(inputIndex) {
+            var left = (inputIndex[0]/seqLength);
+            var right = (inputIndex[1]/seqLength);
+            // Apply an offset for better alignment in GATOR
             return [Math.max(left-0.005,0), right-0.005];
         };
+
+        // Check for gap at the beginning of protein
+        if (indecesList[0][0] > 5) {
+            results.push(convertIndeces([0, indecesList[0][0]]));
+        }
+        // Iterate through any gaps in the middle of protein
+        for (var l = 0; l < (indecesList.length-1); l++) {
+            if (indecesList[l+1][0] - indecesList[l][1] > 5) {
+                results.push(convertIndeces([indecesList[l][1], indecesList[l+1][0]]));
+            }
+        }
+        // Check for gap at the end of protein
+        if (seqLength - indecesList[indecesList.length-1][1] > 5) {
+            results.push(convertIndeces([indecesList[indecesList.length-1][1], seqLength]));
+        }
+
+        return results;
+    };
+
+    // Function to find the indeces of areas in the sequence with no covereage
+    var consolidatePeptides = function(arr) {
+        var coveredIndeces = [];
+        var results = [];
 
         // Populate array of the sequence indeces for found peptides
         for (var i = 0; i < arr.length; i++) {
@@ -711,37 +747,45 @@ MASCP.CondensedSequenceRenderer.prototype.setModhunterGradient = function() {
         }
 
         coveredIndeces.sort(function(a,b) { if (a[0]<b[0]) {return -1;} else {return 1;} });
-        
-        // Check for gap at the beginning of protein
-        if (coveredIndeces[0][0] > 10) {
-            results.push(toPercent([0, coveredIndeces[0][0]]));
-        }
-        // Iterate through any gaps in the middle of protein
-        for (var l = 0; l < (coveredIndeces.length-1); l++) {
-            if (coveredIndeces[l+1][0] - coveredIndeces[l][1] > 10) {
-                results.push(toPercent([coveredIndeces[l][1], coveredIndeces[l+1][0]]));
-            }
-        }
-        // Check for gap at the end of protein
-        if (seqLength - coveredIndeces[coveredIndeces.length-1][1] > 10) {
-            results.push(toPercent([coveredIndeces[coveredIndeces.length-1][1], seqLength]));
-        }
 
-        return results;
+        return coveredIndeces;
     };
 
-    var peps = this._peptide_sequences;
+    // Populate list with peptides from all readers except ProteotypicReader
+    var peps = [];
+    var predictedPeps = [];
+    for (var reader in this._peptide_sequences) {
+        for (var l = 0; l < this._peptide_sequences[reader].length; l++) {
+            if (reader == 'proteotypic') {
+                predictedPeps.push(this._peptide_sequences[reader][l]);
+            } else {
+                peps.push(this._peptide_sequences[reader][l]);
+            }
+        }
+    }
+
     if (peps.length > 0) {
-        peps = sort_unique(peps);
         // Set maximum confidence of modification suggestions based on total # of peptides in GATOR
         var maxRating = peps.length / 40;
         maxRating = (maxRating > 1) ? 1 : maxRating;
-        maxRating = Math.round(maxRating*9);
+        maxRating = Math.round(maxRating*4);
+        // Eliminate redundant peptides
+        peps = sort_unique(peps);
+        // Consolidate overlapping peptides
+        peps = consolidatePeptides(peps);
+        var percentages = toPercent(peps);
+        var predictedPercent = [];
+        // If there are predicted peptides for this AGI, populate this list
+        if (predictedPeps.length > 0) {
+            predictedPeps = sort_unique(predictedPeps);
+            predictedPeps = consolidatePeptides(predictedPeps);
+            predictedPeps = invertIndeces(predictedPeps);
+            predictedPercent = toPercent(predictedPeps);
+        }
         // Create gradient object
-        var percentages = findUncoveredRegions(peps);
         var canv = this._canvas;
         var defs = canv.parentNode.ownerDocument.getElementsByTagNameNS(svgns, 'defs')[0];
-        defs.appendChild(canv.mod_gradient('mod_gradient', percentages, maxRating));
+        defs.appendChild(canv.mod_gradient('mod_gradient', percentages, predictedPercent, maxRating));
     }
     else {
         // Remove modhunter if no peptides are present in the database
