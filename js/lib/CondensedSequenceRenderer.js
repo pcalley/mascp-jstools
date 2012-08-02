@@ -671,7 +671,8 @@ MASCP.CondensedSequenceRenderer.prototype.setModhunterGradient = function() {
             var left = (indeces[0]/seqLength);
             var right = (indeces[1]/seqLength);
 
-            return [left, right];
+            // Adjust offsets for better alignment in GATOR
+            return [Math.max(left-0.005,0), right-0.005];
         };
 
         // Populate array of the sequence indeces for found peptides
