@@ -374,7 +374,51 @@ var SVGCanvas = SVGCanvas || (function() {
             }
             return gradient;
         };
+        
+        /*  Creates gradient for the modhunter track
+        *  Arguments:
+        *       id: string containing id of gradient
+        *       locations: an array of two-member arrays containing start and end
+        *                   points of each gradient, from 0-100 percent
+        *       maxRating: integer from 0-9 representing max confidence rating of
+        *                   suggested modification sites
+        */
+        canvas.mod_gradient = function(id,locations,maxRating) {
+            var gradient = this.makeEl('linearGradient',{
+                'id': id,
+                'x1':'0%',
+                'x2':'100%',
+                'y1':'0%',
+                'y2':'0%'
+            });
 
+            var colorStr = ''+(9-maxRating)+(9-maxRating);
+
+            while(locations.length > 0) {
+                var locate = locations.shift();
+                if (locate[0] >= 0.01) {
+                    gradient.appendChild(this.makeEl('stop',{
+                        'offset':(locate[0]-0.01),
+                        'style':'stop-color:#ccc;stop-opacity:1'
+                    }));
+                }
+                gradient.appendChild(this.makeEl('stop',{
+                    'offset': (locate[0] > 0) ? (locate[0]+0.01) : 0,
+                    'style':'stop-color:#f'+colorStr+';stop-opacity:1'
+                }));
+                gradient.appendChild(this.makeEl('stop',{
+                    'offset': (locate[1] < 1) ? (locate[1]-0.01) : 1,
+                    'style':'stop-color:#f'+colorStr+';stop-opacity:1'
+                }));
+                if (locate[1] <= 0.99) {
+                    gradient.appendChild(this.makeEl('stop',{
+                        'offset':(locate[1]+0.01),
+                        'style':'stop-color:#ccc;stop-opacity:1'
+                    }));
+                }
+            }
+            return gradient;
+        };
 
         canvas.path = function(pathdesc) {
           var a_path = document.createElementNS(svgns,'path');

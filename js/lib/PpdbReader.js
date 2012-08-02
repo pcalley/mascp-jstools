@@ -136,7 +136,11 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     
     this.bind('resultReceived', function() {
         
-//        
+        // Append peptide sequences to master list for modhunter
+        for (var k = 0; k < this.result.getPeptides().length; k++) {
+            sequenceRenderer._peptide_sequences.push(this.result.getPeptides()[k].sequence);
+        }
+
         MASCP.registerGroup('ppdb', {'fullname' : 'PPDB spectra data', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#aa9900' });
 
         var overlay_name = 'ppdb_controller';

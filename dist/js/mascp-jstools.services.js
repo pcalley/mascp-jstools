@@ -1836,6 +1836,11 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
     var reader = this;
 
     this.bind('resultReceived', function() {
+        
+        // Append peptide sequences to master list for modhunter
+        for (var k = 0; k < this.result.getPeptides().length; k++) {
+            sequenceRenderer._peptide_sequences.push(this.result.getPeptides()[k].sequence);
+        }
 
         MASCP.registerGroup('atpeptide_experimental', {'fullname' : 'AtPeptide MS/MS', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
@@ -1880,7 +1885,8 @@ MASCP.AtPeptideReader.Result.prototype.render = function()
     } else {
         return null;
     }
-};/*
+};
+/*
 http://uniprot.org/mapping/?from=ACC+ID&to=REFSEQ_NT_ID&format=list&query=Q9UNA3
  */
 
@@ -2110,6 +2116,10 @@ MASCP.GelMapReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 
             for(var i = peps.length - 1; i >= 0; i--) {
                 var peptide = peps[i];
+
+                // Append peptides to master list for modhunter
+                sequenceRenderer._peptide_sequences.push(peptide);
+
                 var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide);
                 var layer_name = 'gelmap_map_'+a_map.id;
                 peptide_bits.addToLayer(layer_name);
@@ -2954,6 +2964,12 @@ MASCP.Pep2ProReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     var reader = this;
 
     this.bind('resultReceived', function() {
+
+        // Append peptide sequences to master list for modhunter
+        for (var k = 0; k < this.result.getPeptides().length; k++) {
+            sequenceRenderer._peptide_sequences.push(this.result.getPeptides()[k]);
+        }
+
         MASCP.registerGroup('pep2pro',{ 'fullname' : 'Pep2Pro data','hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#000099' });
 
         if ( sequenceRenderer.sequence != this.result.sequence && this.result.sequence != '' ) {
@@ -3010,7 +3026,8 @@ MASCP.Pep2ProReader.prototype._mergeCounts = function(hash)
         }
     }
     return counts;
-};/** @fileOverview   Classes for reading data from the Phosphat database
+};
+/** @fileOverview   Classes for reading data from the Phosphat database
  */
 if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
@@ -3450,7 +3467,11 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     
     this.bind('resultReceived', function() {
         
-//        
+        // Append peptide sequences to master list for modhunter
+        for (var k = 0; k < this.result.getPeptides().length; k++) {
+            sequenceRenderer._peptide_sequences.push(this.result.getPeptides()[k].sequence);
+        }
+
         MASCP.registerGroup('ppdb', {'fullname' : 'PPDB spectra data', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#aa9900' });
 
         var overlay_name = 'ppdb_controller';
