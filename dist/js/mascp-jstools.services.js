@@ -1964,6 +1964,145 @@ MASCP.GelMapReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 MASCP.GelMapReader.Result.prototype.render = function()
 {
 };
+/**
+ * @fileOverview    Classes for reading GlycoMod data
+ */
+
+if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
+
+/** Default class constructor
+ *  @class      Service class that will retrieve data from GlycoMod for a given AGI.
+ *  @param      {String} agi            Agi to look up
+ *  @param      {String} endpointURL    Endpoint URL for this service
+ *  @extends    MASCP.Service
+ */
+MASCP.GlycoModReader = MASCP.buildService(function(data) {
+                        this._raw_data = data;                        
+                        return this;
+                    });
+
+MASCP.GlycoModReader.SERVICE_URL = 'http://gator.masc-proteomics.org/rippdb.pl?';
+
+MASCP.GlycoModReader.prototype.requestData = function()
+{
+    var agi = this.agi;
+    
+    return {
+        type: "GET",
+        dataType: "json",
+        data: { 'agi'       : agi,
+                'service'   : 'glycomod' 
+        }
+    };
+};
+
+/**
+ *  @class   Container class for results from the GlycoMod service
+ *  @extends MASCP.Service.Result
+ */
+// We need this line for the JsDoc to pick up this class
+MASCP.GlycoModReader.Result = MASCP.GlycoModReader.Result;
+
+/** Retrieve the peptides for this particular entry from the GlycoMod service
+ *  @returns Array of peptide strings
+ *  @type [String]
+ */
+MASCP.GlycoModReader.Result.prototype.getPeptides = function()
+{
+    var content = null;
+
+    if (this._peptides) {
+        return this._peptides;
+    }
+
+    if (! this._raw_data || ! this._raw_data.peptides) {
+        return [];
+    }
+
+
+    this._peptides= this._raw_data.peptides;
+    
+    return this._peptides;
+};
+
+MASCP.GlycoModReader.Result.prototype._cleanSequence = function(sequence)
+{
+    return sequence.replace(/[^A-Z]/g,'');
+};
+
+MASCP.GlycoModReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
+{
+    var reader = this;
+
+    var css_block = '.active .overlay { background: #ff00ff; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
+    
+    this.bind('resultReceived', function() {
+        var peps = this.result.getPeptides();
+
+        var overlay_name = 'glycomod_experimental';
+        var icons = [];
+        
+        if (peps.length > 0) {
+            MASCP.registerLayer(overlay_name,{ 'fullname' : 'GlycoMod (mod)', 'color' : '#ff00ff', 'css' : css_block });
+
+            MASCP.registerGroup('glycomod_peptides', {'fullname' : 'Glycosilation Publication ', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff00ff' });
+            if (sequenceRenderer.createGroupController) {
+                sequenceRenderer.createGroupController('glycomod_experimental','glycomod_peptides');
+            }
+        }
+
+        for (var j = 0; j < peps.length; j++ ) {
+            var pep = peps[j];
+            
+            if (pep.length === 0) {
+                continue;
+            }
+            var layer_name = 'glycomod_spectrum_';
+            MASCP.registerLayer(layer_name, { 'fullname': 'Spectrum ', 'group' : 'glycomod_peptides', 'color' : '#ff00ff', 'css' : css_block });
+            var peptide = pep.sequence;
+            var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide);
+            if (peptide_bits.length === 0){
+	        continue;
+            }
+            peptide_bits.addToLayer(layer_name);
+            icons.push(peptide_bits.addToLayer('glycomod_experimental'));
+
+	     for (var k = 0; k < pep.de_index.length; k++ ) {
+		icons = icons.concat(peptide_bits[pep.de_index[k] - 1].addToLayer('glycomod_experimental'));
+		peptide_bits[pep.de_index[k] - 1].addToLayer(layer_name);
+	     }
+        }
+        jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);
+    });
+    return this;
+};
+/** Retrieve an array of positions that phosphorylation has been experimentally verified to occur upon
+ *  @returns {Array}    Phosphorylation positions upon the full protein
+ */
+MASCP.GlycoModReader.Result.prototype.getAllExperimentalPositions = function()
+{
+    var specs = this.getPeptides();
+    var results = [];
+    var seen = {};
+    specs.forEach(function(spec) {
+        var peps = spec.peptides;
+        peps.forEach(function(pep) {
+            pep.de_index.forEach(function(pos) {
+                if ( ! seen[pos] ) {
+                    results.push(pos);
+                    seen[pos] = true;
+                }
+            });
+        });
+    });
+    return results;
+}
+MASCP.GlycoModReader.Result.prototype.render = function()
+{
+};
+
 /** @fileOverview   Classes for reading domains from Interpro 
  */
 if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
@@ -3061,188 +3200,6 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     });
     return this;
 };
-
-/**
- *  @fileOverview Classes for reading data from the Pubmed databases using
- */
-
-/**
- * @class   Service class that will retrieve Pubmed data for this entry given an AGI.
- * @description Default class constructor
- * @param   {String} agi            Agi to look up
- * @param   {String} endpointURL    Endpoint URL for this service
- * @extends MASCP.Service
- */
- 
-MASCP.PubmedReader = MASCP.buildService(function(data) {
-                        if (! data ) {
-                            return this;
-                        }
-                        var extractData = function()
-                        {
-                            var features = this._raw_data.getElementsByTagName('FEATURE');
-
-                            var peptides = [];
-
-                            var peps_by_seq = {};
-                            var all_publications = {};
-                            for (var i = 0 ; i < features.length; i++ ) {
-                                var type = features[i].getElementsByTagName('TYPE')[0];
-                                var textcontent = type.textContent || type.text || type.nodeValue;
-                                if ( textcontent == 'Peptide') {
-                                    var seq = features[i].getAttribute('label');
-                                    if ( ! peps_by_seq[seq] ) {
-                                        peps_by_seq[seq] = { 'publications' : [] };
-                                    }
-                                    var exp_id = parseInt(features[i].getElementsByTagName('GROUP')[0].getAttribute('id'),10);
-                                    peps_by_seq[seq].publications.push(exp_id);
-                                    all_publications[exp_id] = true;            
-                                }
-                            }
-                            for (var pep in peps_by_seq) {
-                                if (peps_by_seq.hasOwnProperty(pep)) {
-                                    var pep_obj =  { 'sequence' : pep , 'publications' : peps_by_seq[pep].publications};
-                                    peptides.push(pep_obj);
-                                }
-                            }
-
-                            this._publications= [];
-                            for (var expid in all_publications) {
-                                if (all_publications.hasOwnProperty(expid)) {
-                                    this._publications.push(parseInt(expid,10));
-                                }
-                            }
-
-                            return peptides;
-                        };
-                        this._raw_data = data;
-                        if (data.getElementsByTagName) {
-                            var peps = extractData.call(this);
-                            this._raw_data = {
-                                'publications' : this._publications,
-                                'peptides'    : peps
-                            };
-                        }
-                        this._publications= this._raw_data.publications;
-                        this._peptides    = this._raw_data.peptides;
-                        return this;
-                    });
-
-MASCP.PubmedReader.prototype.requestData = function()
-{
-    var self = this;
-    var agi = (this.agi+"").replace(/\..*$/,'');
-    var dataType = 'json';
-    if ((this._endpointURL || '').indexOf('xml') >= 0) {
-        dataType = 'xml';
-    }
-    return {
-        type: "GET",
-        dataType: dataType,
-        data: { 'segment'   : agi,
-                'agi'       : this.agi,
-                'service'   : 'pubmed'
-        }
-    };
-};
-
-
-MASCP.PubmedReader.SERVICE_URL = 'http://ppdb.tc.cornell.edu/das/arabidopsis/features/?output=xml'; /* ?segment=locusnumber */
-
-/**
- * @class   Container class for results from the Ppdb service
- * @extends MASCP.Service.Result
- */
-// We need this line for the JsDoc to pick up this class
-MASCP.PubmedReader.Result = MASCP.PubmedReader.Result;
-
-MASCP.PubmedReader.Result.prototype = MASCP.extend(MASCP.PubmedReader.Result.prototype,
-/** @lends MASCP.PubmedReader.Result.prototype */
-{
-    /** @field 
-     *  @description Hash keyed by tissue name containing the number of spectra for each tissue for this AGI */
-    spectra :   null,
-    /** @field
-     *  @description Hash keyed by the Plant Ontology ID containing the number of spectra for each peptide (keyed by "start-end" position) */
-    peptide_counts_by_tissue : null,
-    /** @field
-     *  @description String containing the sequence for the retrieved AGI */
-    sequence : null
-});
-
-MASCP.PubmedReader.Result.prototype.render = function()
-{
-    return null;
-};
-
-MASCP.PubmedReader.Result.prototype.getPublications= function()
-{
-    return this._publications|| [];
-};
-
-MASCP.PubmedReader.Result.prototype.getPeptides = function()
-{
-    var peps = this._peptides || [];
-    peps.forEach(function(pep_obj) {
-        pep_obj.toString = function(p) {
-            return function() {
-                return p.sequence;
-            };
-        }(pep_obj);
-    });
-    return peps;
-};
-
-
-MASCP.PubmedReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
-{
-    var reader = this;
-    
-    this.bind('resultReceived', function() {
-        
-        
-        MASCP.registerGroup('pubmed', {'fullname' : 'Pubmed', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#000000' });
-
-        var overlay_name = 'pubmed_controller';
-
-        var css_block = '.active .overlay { background: #000000; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
-
-        MASCP.registerLayer(overlay_name,{ 'fullname' : 'Pubmed', 'color' : '#000000', 'css' : css_block });
-
-        if (sequenceRenderer.createGroupController) {
-            sequenceRenderer.createGroupController('pubmed_controller','pubmed');
-        }
-        
-        var peps = this.result.getPeptides();
-        var publications= this.result.getPublications();
-        for(var i = 0; i < publications.length; i++) {
-            var layer_name = 'pubmed_publication'+publications[i];
-            MASCP.registerLayer(layer_name, { 'fullname': 'Publication'+publications[i], 'group' : 'pubmed', 'color' : '#000000', 'css' : css_block });
-            MASCP.getLayer(layer_name).href = 'http://ppdb.tc.cornell.edu/dbsearch/searchsample.aspx?exprid='+publications[i];
-            for (var j = 0 ; j < peps.length; j++) {
-                var peptide = peps[j];
-                if (peps[j].publications.indexOf(publications[i]) < 0) {
-                    continue;
-                }
-                var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide.sequence);
-                peptide_bits.addToLayer(layer_name);
-                peptide_bits.addToLayer(overlay_name);
-            }
-        }
-        jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);        
-
-
-
-    });
-    return this;
-};
-
-
-
-
-
-
-
 /** @fileOverview   Classes for reading data from the Processing data
  */
 if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
@@ -3436,7 +3393,182 @@ MASCP.PromexReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 
 MASCP.PromexReader.Result.prototype.render = function()
 {
-};/** @fileOverview   Classes for reading data from the Rippdb database
+};/**
+ *  @fileOverview Classes for reading data from the Pubmed databases using
+ */
+
+/**
+ * @class   Service class that will retrieve Pubmed data for this entry given an AGI.
+ * @description Default class constructor
+ * @param   {String} agi            Agi to look up
+ * @param   {String} endpointURL    Endpoint URL for this service
+ * @extends MASCP.Service
+ */
+ 
+MASCP.PubmedReader = MASCP.buildService(function(data) {
+                        if (! data ) {
+                            return this;
+                        }
+                        var extractData = function()
+                        {
+                            var features = this._raw_data.getElementsByTagName('FEATURE');
+
+                            var peptides = [];
+
+                            var peps_by_seq = {};
+                            var all_experiments = {};
+                            for (var i = 0 ; i < features.length; i++ ) {
+                                var type = features[i].getElementsByTagName('TYPE')[0];
+                                var textcontent = type.textContent || type.text || type.nodeValue;
+                                if ( textcontent == 'Peptide') {
+                                    var seq = features[i].getAttribute('label');
+                                    if ( ! peps_by_seq[seq] ) {
+                                        peps_by_seq[seq] = { 'experiments' : [] };
+                                    }
+                                    var exp_id = parseInt(features[i].getElementsByTagName('GROUP')[0].getAttribute('id'),10);
+                                    peps_by_seq[seq].experiments.push(exp_id);
+                                    all_experiments[exp_id] = true;            
+                                }
+                            }
+                            for (var pep in peps_by_seq) {
+                                if (peps_by_seq.hasOwnProperty(pep)) {
+                                    var pep_obj =  { 'sequence' : pep , 'experiments' : peps_by_seq[pep].experiments };
+                                    peptides.push(pep_obj);
+                                }
+                            }
+
+                            this._experiments = [];
+                            for (var expid in all_experiments) {
+                                if (all_experiments.hasOwnProperty(expid)) {
+                                    this._experiments.push(parseInt(expid,10));
+                                }
+                            }
+
+                            return peptides;
+                        };
+                        this._raw_data = data;
+                        if (data.getElementsByTagName) {
+                            var peps = extractData.call(this);
+                            this._raw_data = {
+                                'experiments' : this._experiments,
+                                'peptides'    : peps
+                            };
+                        }
+                        this._experiments = this._raw_data.experiments;
+                        this._peptides    = this._raw_data.peptides;
+                        return this;
+                    });
+
+MASCP.PubmedReader.prototype.requestData = function()
+{
+    var self = this;
+    var agi = (this.agi+"").replace(/\..*$/,'');
+    var dataType = 'json';
+    if ((this._endpointURL || '').indexOf('xml') >= 0) {
+        dataType = 'xml';
+    }
+    return {
+        type: "GET",
+        dataType: dataType,
+        data: { 'segment'   : agi,
+                'agi'       : this.agi,
+                'service'   : 'pubmed'
+        }
+    };
+};
+
+
+MASCP.PubmedReader.SERVICE_URL = 'http://ppdb.tc.cornell.edu/das/arabidopsis/features/?output=xml'; /* ?segment=locusnumber */
+
+/**
+ * @class   Container class for results from the Ppdb service
+ * @extends MASCP.Service.Result
+ */
+// We need this line for the JsDoc to pick up this class
+MASCP.PubmedReader.Result = MASCP.PubmedReader.Result;
+
+MASCP.PubmedReader.Result.prototype = MASCP.extend(MASCP.PubmedReader.Result.prototype,
+/** @lends MASCP.PubmedReader.Result.prototype */
+{
+    /** @field 
+     *  @description Hash keyed by tissue name containing the number of spectra for each tissue for this AGI */
+    spectra :   null,
+    /** @field
+     *  @description Hash keyed by the Plant Ontology ID containing the number of spectra for each peptide (keyed by "start-end" position) */
+    peptide_counts_by_tissue : null,
+    /** @field
+     *  @description String containing the sequence for the retrieved AGI */
+    sequence : null
+});
+
+MASCP.PubmedReader.Result.prototype.render = function()
+{
+    return null;
+};
+
+MASCP.PubmedReader.Result.prototype.getExperiments = function()
+{
+    return this._experiments || [];
+};
+
+MASCP.PubmedReader.Result.prototype.getPeptides = function()
+{
+    var peps = this._peptides || [];
+    peps.forEach(function(pep_obj) {
+        pep_obj.toString = function(p) {
+            return function() {
+                return p.sequence;
+            };
+        }(pep_obj);
+    });
+    return peps;
+};
+
+
+MASCP.PubmedReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
+{
+    var reader = this;
+    
+    this.bind('resultReceived', function() {
+        
+        
+        MASCP.registerGroup('pubmed', {'fullname' : 'Pubmed', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#aa9900' });
+
+        var overlay_name = 'pubmed_controller';
+
+        var css_block = '.active .overlay { background: #aa9900; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
+
+        MASCP.registerLayer(overlay_name,{ 'fullname' : 'Pubmed', 'color' : '#aa9900', 'css' : css_block });
+
+        if (sequenceRenderer.createGroupController) {
+            sequenceRenderer.createGroupController('pubmed_controller','ppdb');
+        }
+        
+        var peps = this.result.getPeptides();
+        var experiments = this.result.getExperiments();
+        for(var i = 0; i < experiments.length; i++) {
+            var layer_name = 'pubmed_experiment'+experiments[i];
+            MASCP.registerLayer(layer_name, { 'fullname': 'Experiment '+experiments[i], 'group' : 'pubmed', 'color' : '#aa9900', 'css' : css_block });
+            MASCP.getLayer(layer_name).href = 'http://ppdb.tc.cornell.edu/dbsearch/searchsample.aspx?exprid='+experiments[i];
+            for (var j = 0 ; j < peps.length; j++) {
+                var peptide = peps[j];
+                if (peps[j].experiments.indexOf(experiments[i]) < 0) {
+                    continue;
+                }
+                var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide.sequence);
+                peptide_bits.addToLayer(layer_name);
+                peptide_bits.addToLayer(overlay_name);
+            }
+        }
+        jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);        
+
+
+
+    });
+    return this;
+};
+
+/** @fileOverview   Classes for reading data from the Rippdb database
  */
 if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
@@ -3587,152 +3719,13 @@ MASCP.RippdbReader.Result.prototype.getAllExperimentalPositions = function()
 MASCP.RippdbReader.Result.prototype.render = function()
 {
 };/**
- * @fileOverview    Classes for reading GlycoMod data
- */
-
-if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
-    throw "MASCP.Service is not defined, required class";
-}
-
-/** Default class constructor
- *  @class      Service class that will retrieve data from GlycoMod for a given AGI.
- *  @param      {String} agi            Agi to look up
- *  @param      {String} endpointURL    Endpoint URL for this service
- *  @extends    MASCP.Service
- */
-MASCP.GlycoModReader = MASCP.buildService(function(data) {
-                        this._raw_data = data;                        
-                        return this;
-                    });
-
-MASCP.GlycoModReader.SERVICE_URL = 'http://gator.masc-proteomics.org/rippdb.pl?';
-
-MASCP.GlycoModReader.prototype.requestData = function()
-{
-    var agi = this.agi;
-    
-    return {
-        type: "GET",
-        dataType: "json",
-        data: { 'agi'       : agi,
-                'service'   : 'glycomod' 
-        }
-    };
-};
-
-/**
- *  @class   Container class for results from the GlycoMod service
- *  @extends MASCP.Service.Result
- */
-// We need this line for the JsDoc to pick up this class
-MASCP.GlycoModReader.Result = MASCP.GlycoModReader.Result;
-
-/** Retrieve the peptides for this particular entry from the GlycoMod service
- *  @returns Array of peptide strings
- *  @type [String]
- */
-MASCP.GlycoModReader.Result.prototype.getPeptides = function()
-{
-    var content = null;
-
-    if (this._peptides) {
-        return this._peptides;
-    }
-
-    if (! this._raw_data || ! this._raw_data.peptides) {
-        return [];
-    }
-
-
-    this._peptides= this._raw_data.peptides;
-    
-    return this._peptides;
-};
-
-MASCP.GlycoModReader.Result.prototype._cleanSequence = function(sequence)
-{
-    return sequence.replace(/[^A-Z]/g,'');
-};
-
-MASCP.GlycoModReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
-{
-    var reader = this;
-
-    var css_block = '.active .overlay { background: #ff00ff; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
-    
-    this.bind('resultReceived', function() {
-        var peps = this.result.getPeptides();
-
-        var overlay_name = 'glycomod_experimental';
-        var icons = [];
-        
-        if (peps.length > 0) {
-            MASCP.registerLayer(overlay_name,{ 'fullname' : 'GlycoMod (mod)', 'color' : '#ff00ff', 'css' : css_block });
-
-            MASCP.registerGroup('glycomod_peptides', {'fullname' : 'Phosphorylation Rippdb', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff00ff' });
-            if (sequenceRenderer.createGroupController) {
-                sequenceRenderer.createGroupController('glycomod_experimental','glycomod_peptides');
-            }
-        }
-
-        for (var j = 0; j < peps.length; j++ ) {
-            var pep = peps[j];
-            
-            if (pep.length === 0) {
-                continue;
-            }
-            var layer_name = 'glycomod_spectrum_';
-           MASCP.registerLayer(layer_name, { 'fullname': 'Spectrum ', 'group' : 'glycomod_peptides', 'color' : '#ff00ff', 'css' : css_block });
-                var peptide = pep.sequence;
-                var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide);
-                if (peptide_bits.length === 0){
-                    continue;
-                }
-                peptide_bits.addToLayer(layer_name);
-                icons.push(peptide_bits.addToLayer('glycomod_experimental'));
-
-                for (var k = 0; k < pep[i].de_index.length; k++ ) {
-                    icons = icons.concat(peptide_bits[pep[i].de_index[k] - 1].addToLayer('glycomod_experimental'));
-		    peptide_bits[pep.de_index[k] - 1].addToLayer(layer_name);
-                }
-
-            
-        }
-        jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);
-    });
-    return this;
-};
-/** Retrieve an array of positions that phosphorylation has been experimentally verified to occur upon
- *  @returns {Array}    Phosphorylation positions upon the full protein
- */
-MASCP.GlycoModReader.Result.prototype.getAllExperimentalPositions = function()
-{
-    var specs = this.getPeptides();
-    var results = [];
-    var seen = {};
-    specs.forEach(function(spec) {
-        var peps = spec.peptides;
-        peps.forEach(function(pep) {
-            pep.de_index.forEach(function(pos) {
-                if ( ! seen[pos] ) {
-                    results.push(pos);
-                    seen[pos] = true;
-                }
-            });
-        });
-    });
-    return results;
-}
-MASCP.GlycoModReader.Result.prototype.render = function()
-{
-
-};/**
  * @fileOverview    Classes for reading SNP data
  */
 
 if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
 }
+
 
 
 /** Default class constructor

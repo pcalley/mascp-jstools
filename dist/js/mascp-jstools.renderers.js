@@ -1263,8 +1263,7 @@ var SVGCanvas = SVGCanvas || (function() {
                         if (diff < 0 && (hash.y < target_y) ) {
                             hash.y = target_y;
                         }
-                        if (diff > 0 && (hash.y > target_y) ) {
-                            hash.y = target_y;
+                        if (diff > 0 && (hash.y > target_y) ) {                            hash.y = target_y;
                         }
                         attr(hash);
                         counter += (step || 1);
@@ -1706,7 +1705,7 @@ var SVGCanvas = SVGCanvas || (function() {
         };
 
         canvas.marker = function(cx,cy,r,symbol,opts) {
-            var units = 0;
+            var units= 0;
             if (typeof cx == 'string') {
                 var parts = new RegExp(/(\d+)(.*)/g).exec(cx);
                 units = parts[2];
@@ -1754,9 +1753,14 @@ var SVGCanvas = SVGCanvas || (function() {
             marker.setAttribute('transform','translate('+((cx)*RS)+','+0.5*cy*RS+') scale(1)');
             marker.setAttribute('height', dim.R*RS);
             if (typeof symbol == 'string') {
-                marker.contentElement = this.text_circle(0,0.5*r,1.75*r,symbol,opts);
-                marker.push(marker.contentElement);
-            } else {
+                if ( symbol == 'CLO' ){
+		    marker.contentElement = this.long_text_circle(0,0.5*r,1.75*r,symbol,opts);
+		    marker.push(marker.contentElement);
+		}else{
+		    marker.contentElement = this.text_circle(0,0.5*r,1.75*r,symbol,opts);
+		    marker.push(marker.contentElement);
+		} 
+	    } else {
                 marker.contentElement = this.group();
                 if (symbol) {
                     marker.contentElement.push(symbol);
@@ -1766,7 +1770,7 @@ var SVGCanvas = SVGCanvas || (function() {
             return marker;
         };
 
-        canvas.text_circle = function(cx,cy,r,txt,opts) {
+    canvas.long_text_circle = function(cx,cy,r,txt,opts) {
 
             if ( ! opts ) {
                 opts = {};
@@ -1789,9 +1793,59 @@ var SVGCanvas = SVGCanvas || (function() {
             var dim = {
                 CX      : cx+units,
                 CY      : cy+units,
-                R       : r+units,
-                MIN_X   : (cx-r)+units,
-                MAX_X   : (cx+r)+units,
+                R       : r+units, MIN_X   : (cx-r)+units, MAX_X   : (cx+r)+units,
+                MIN_Y   : (cy-r)+units,
+                MAX_Y   : (cy+r)+units,
+                MID_X1  : (cx-(r/2))+units,
+                MID_X2  : (cx+(r/2))+units,
+                MID_Y1  : (cy-(r/2))+units,
+                MID_Y2  : (cy+(r/2))+units
+            };
+
+            var marker_group = this.group();
+
+            var back = this.circle(0,dim.CY,9/10*dim.R);
+            back.setAttribute('fill','url(#simple_gradient)');
+            back.setAttribute('stroke', opts.border || '#000000');
+            back.setAttribute('stroke-width', (r/10)*RS);
+
+            marker_group.push(back);
+            var text = this.text(0,dim.CY-0.5*dim.R,txt);
+            text.setAttribute('font-size',r*RS-10);
+            text.setAttribute('font-weight','bolder');
+            text.setAttribute('fill','#ffffff');
+            text.setAttribute('style','font-family: sans-serif; text-anchor: middle;');
+            text.firstChild.setAttribute('dy','1.85ex');
+            text.setAttribute('text-anchor','middle');
+	    marker_group.push(text);
+            marker_group.setAttribute('transform','translate('+dim.CX*RS+', 1) scale(1)');
+            marker_group.setAttribute('height', (dim.R/2)*RS );
+            return marker_group;
+        };
+    canvas.text_circle = function(cx,cy,r,txt,opts) {
+
+            if ( ! opts ) {
+                opts = {};
+            }        
+
+            var units = 0;
+
+            if (typeof cx == 'string') {
+                var parts = new RegExp(/(\d+)(.*)/g).exec(cx);
+                units = parts[2];
+                cx = parseFloat(parts[1]);
+
+                parts = new RegExp(/(\d+)(.*)/g).exec(cy);
+                cy = parseFloat(parts[1]);
+
+                parts = new RegExp(/(\d+)(.*)/g).exec(r);
+                r = parseFloat(parts[1]);        
+
+            }
+            var dim = {
+                CX      : cx+units,
+                CY      : cy+units,
+                R       : r+units, MIN_X   : (cx-r)+units, MAX_X   : (cx+r)+units,
                 MIN_Y   : (cy-r)+units,
                 MAX_Y   : (cy+r)+units,
                 MID_X1  : (cx-(r/2))+units,
@@ -1947,7 +2001,8 @@ var SVGCanvas = SVGCanvas || (function() {
         };
     });
 
-})();/**
+})();
+/**
  *  @fileOverview   Basic classes and definitions for an SVG-based sequence renderer
  */
 
@@ -2697,8 +2752,11 @@ var addElementToLayer = function(layerName) {
             return renderer._visibleTracers();
         };
     }
-    var tracer_marker = canvas.marker(this._index+0.3,10,0.5,layerName.charAt(0).toUpperCase());
-    
+    if ( layerName.charAt(0) == 'g' ) {
+	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,'CLO');
+    }else{ 
+	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,layerName.charAt(0).toUpperCase());
+    } 
     // tracer_marker.zoom_level = 'text';
     tracer_marker.setAttribute('visibility','hidden');
 
@@ -3477,7 +3535,7 @@ clazz.prototype.refresh = function(animated) {
 
     var viewBox = [-1,0,0,0];
     viewBox[0] = -2*RS;
-    viewBox[2] = (this.sequence.split('').length+(this.padding+2))*RS;
+    viewBox[2] = (this.sequence.split('').length+(this.padding)+2)*RS;
     viewBox[3] = (this._axis_height + (track_heights / this.zoom)+ (this.padding))*RS;
     this._canvas.setAttribute('viewBox', viewBox.join(' '));
     this._canvas._canvas_height = viewBox[3];
