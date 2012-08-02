@@ -4044,15 +4044,7 @@ MASCP.PromexReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 
 MASCP.PromexReader.Result.prototype.render = function()
 {
-};/** @fileOverview   Classes for reading data from the Rippdb database
- */
-if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
-    throw "MASCP.Service is not defined, required class";
-}
-
-
-
-/** Default class constructor
+};/** Default class constructor
  *  @class      Service class that will retrieve data from Predicted Proteotypic Peptides for a given AGI.
  *  @param      {String} agi            Agi to look up
  *  @param      {String} endpointURL    Endpoint URL for this service
@@ -4169,7 +4161,11 @@ if ( typeof MASCP === 'undefined' || typeof MASCP.Service === 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
 }
 
-
+/** @fileOverview   Classes for reading data from the Rippdb database
+ */
+if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
 
 /** Default class constructor
  *  @class      Service class that will retrieve data from Rippdb for a given AGI.
@@ -5723,6 +5719,7 @@ if ( typeof MASCP == 'undefined' ) {
     }
 }
 
+
 /**
  *  @lends MASCP.Group.prototype
  *  @property   {String}        name                        Name for this group to be used as an identifier
@@ -7176,7 +7173,6 @@ var SVGCanvas = SVGCanvas || (function() {
             curr_scale = parseFloat(curr_scale[1]);
         }
         new_scale = ( parseFloat(height) / curr_height ) * curr_scale;
-
         curr_transform = curr_transform.replace(scale_re,'scale('+new_scale+')');
 
         this.setAttribute('transform',curr_transform);
