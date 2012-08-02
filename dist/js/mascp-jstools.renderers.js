@@ -2869,7 +2869,7 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     rect.style.strokeWidth = '0px';
     rect.setAttribute('visibility', 'hidden');
     rect.style.opacity = fraction;
-    rect.setAttribute('fill',MASCP.layers[layerName].color);
+    rect.setAttribute('fill','#000099');
     rect.position_start = this._index;
     rect.position_end = this._index + width;
     return rect;
