@@ -2687,7 +2687,7 @@ var addBoxOverlayToElement = function(layerName,width,fraction) {
     rect.style.strokeWidth = '0px';
     rect.setAttribute('visibility', 'hidden');
     rect.style.opacity = fraction;
-    rect.setAttribute('fill','#000099');
+    rect.setAttribute('fill',MASCP.layers[layerName].color);
     rect.position_start = this._index;
     rect.position_end = this._index + width;
     return rect;
@@ -3129,7 +3129,7 @@ MASCP.CondensedSequenceRenderer.prototype.redrawAnnotations = function(layerName
         // Convert the template into pure JavaScript
         str
           .replace(/[\r\t\n]/g, " ")
-          .split("<%").join("\t")
+          .split(/\x3c\%/g).join("\t")
           .replace(/((^|%>)[^\t]*)'/g, "$1\r")
           .replace(/\t=(.*?)%>/g, "',$1,'")
           .split("\t").join("');")
