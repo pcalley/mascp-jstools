@@ -7263,11 +7263,9 @@ var SVGCanvas = SVGCanvas || (function() {
                     if ((c <= a && d >= a && d-a >= (b-a)*0.5) || (c <= b && c >= a && b-c >= (b-a)*0.5)) {
                         isPredicted = true;
                     }
-                    //console.log('['+a+','+b+'] vs ['+c+','+d+']: '+isPredicted);
                 }
                 var thisRating = 9 - (maxRating + (isPredicted == true ? 5 : 0));
                 var colorStr = '' + thisRating + thisRating;
-                console.log(colorStr);
                 if (locate[0] >= 0.005) {
                     gradient.appendChild(this.makeEl('stop',{
                         'offset':(locate[0]-0.005),
