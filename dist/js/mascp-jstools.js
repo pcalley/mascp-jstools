@@ -2181,13 +2181,6 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
     var reader = this;
 
     this.bind('resultReceived', function() {
-        
-        // Append peptide sequences to master list for modhunter
-        sequenceRenderer._peptide_sequences['atpeptide'] = [];
-        var thesePeptides = this.result.getPeptides();
-        for (var k = 0; k < thesePeptides.length; k++) {
-            sequenceRenderer._peptide_sequences['atpeptide'].push(thesePeptides[k].sequence);
-        }
 
         MASCP.registerGroup('atpeptide_experimental', {'fullname' : 'AtPeptide MS/MS', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
@@ -2202,6 +2195,13 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
         }
                 
         var peps = this.result.getPeptides();
+
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['atpeptide'] = [];
+        for (var k = 0; k < peps.length; k++) {
+            sequenceRenderer._peptide_sequences['atpeptide'].push(peps[k].sequence);
+        }
+
         for (var j = 0; j < this.result.tissues().length; j++ ) {
             var a_tissue = this.result.tissues()[j];
             MASCP.registerLayer('atpeptide_peptide_'+a_tissue, { 'fullname': this.result._long_name_map[a_tissue], 'group' : 'atpeptide_experimental', 'color' : '#ff5533', 'css' : css_block });
@@ -3993,13 +3993,6 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     var reader = this;
     
     this.bind('resultReceived', function() {
-        
-        // Append peptide sequences to master list for modhunter
-        sequenceRenderer._peptide_sequences['ppdb'] = [];
-        var thesePeptides = this.result.getPeptides();
-        for (var k = 0; k < thesePeptides.length; k++) {
-            sequenceRenderer._peptide_sequences['ppdb'].push(thesePeptides[k].sequence);
-        }
 
         MASCP.registerGroup('ppdb', {'fullname' : 'PPDB spectra data', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#aa9900' });
 
@@ -4014,6 +4007,13 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
         }
         
         var peps = this.result.getPeptides();
+
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['ppdb'] = [];
+        for (var k = 0; k < peps.length; k++) {
+            sequenceRenderer._peptide_sequences['ppdb'].push(peps[k].sequence);
+        }
+
         var experiments = this.result.getExperiments();
         for(var i = 0; i < experiments.length; i++) {
             var layer_name = 'ppdb_experiment'+experiments[i];
@@ -4299,13 +4299,6 @@ MASCP.ProteotypicReader.prototype.setupSequenceRenderer = function(sequenceRende
 
     this.bind('resultReceived', function() {
 
-        // Append peptide sequences to master list for modhunter
-        sequenceRenderer._peptide_sequences['proteotypic'] = [];
-        var thesePeptides = this.result.getPeptides();
-        for (var k = 0; k < thesePeptides.length; k++) {
-            sequenceRenderer._peptide_sequences['proteotypic'].push(thesePeptides[k].sequence);
-        }
-
         MASCP.registerGroup('proteotypic_experimental', {'fullname' : 'Expected Peptides', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
         var overlay_name = 'proteotypic_controller';
@@ -4319,6 +4312,17 @@ MASCP.ProteotypicReader.prototype.setupSequenceRenderer = function(sequenceRende
         }
                 
         var peps = this.result.getPeptides();
+
+        // Append peptide sequences to master list for modhunter
+        // Predictions for each experimental type are put in separate containers
+        for (var k = 0; k < peps.length; k++) {
+            // If a container for this exp type doesn't exist, create it
+            if (sequenceRenderer._peptide_sequences.hasOwnProperty('proteotypic'+peps[k].exp) == false) {
+                sequenceRenderer._peptide_sequences['proteotypic'+peps[k].exp] = [];
+            }
+            sequenceRenderer._peptide_sequences['proteotypic'+peps[k].exp].push(peps[k].sequence);
+        }
+
         var exps_done = '';
 		for(var i = 0; i < peps.length; i++) {
             var an_exp = peps[i].exp;
@@ -6306,7 +6310,7 @@ MASCP.SequenceRenderer.prototype.setSequence = function(sequence)
         this.addToLayerWithLink = MASCP.SequenceRenderer.addElementToLayerWithLink;
         this._renderer = renderer;
     });
-    this._sequence_els = sequence_els;   
+    this._sequence_els = sequence_els;
     jQuery(this).trigger('sequenceChange');
 };
 
@@ -7421,7 +7425,7 @@ var SVGCanvas = SVGCanvas || (function() {
         *       maxRating: integer from 0-9 representing max confidence rating of
         *                   suggested modification sites
         */
-        canvas.mod_gradient = function(id,locations,predictedLocations,maxRating) {
+        canvas.mod_gradient = function(id, stopObject, seqLength) {
             var gradient = this.makeEl('linearGradient',{
                 'id': id,
                 'x1':'0%',
@@ -7430,43 +7434,16 @@ var SVGCanvas = SVGCanvas || (function() {
                 'y2':'0%'
             });
 
-            while(locations.length > 0) {
-                var locate = locations.shift();
-                var isPredicted = false;
-                for (var i = 0; i < predictedLocations.length; i++) {
-                    var a = locate[0];
-                    var b = locate[1];
-                    var c = predictedLocations[i][0];
-                    var d = predictedLocations[i][1];
-                    
-                    // Set the isPredicted flag if there is overlap with a predicted peptide
-                    if ((c <= a && d >= a && d-a >= (b-a)*0.5) || (c <= b && c >= a && b-c >= (b-a)*0.5)) {
-                        isPredicted = true;
-                    }
-                }
-                var thisRating = 9 - (maxRating + (isPredicted == true ? 5 : 0));
-                var colorStr = '' + thisRating + thisRating;
-                if (locate[0] >= 0.005) {
-                    gradient.appendChild(this.makeEl('stop',{
-                        'offset':(locate[0]-0.005),
-                        'style':'stop-color:#ccc;stop-opacity:1'
-                    }));
-                }
+            for (var stop in stopObject) {
+                var thisPercent = stop / seqLength;
+                var colorStr = '' + 255-(Math.round((stopObject[stop]/100)*255));
+
                 gradient.appendChild(this.makeEl('stop',{
-                    'offset': (locate[0] > 0) ? (locate[0]+0.005) : 0,
-                    'style':'stop-color:#f'+colorStr+';stop-opacity:1'
+                    'offset': thisPercent.toString(),
+                    'style':'stop-color:rgb(255,'+colorStr+','+colorStr+');stop-opacity:1'
                 }));
-                gradient.appendChild(this.makeEl('stop',{
-                    'offset': (locate[1] < 1) ? (locate[1]-0.005) : 1,
-                    'style':'stop-color:#f'+colorStr+';stop-opacity:1'
-                }));
-                if (locate[1] <= 0.995) {
-                    gradient.appendChild(this.makeEl('stop',{
-                        'offset':(locate[1]+0.005),
-                        'style':'stop-color:#ccc;stop-opacity:1'
-                    }));
-                }
             }
+
             return gradient;
         };
 
@@ -8339,6 +8316,8 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
             el._renderer = renderer;
             renderer._extendElement(el);
             el.amino_acid = this;
+            el._predicted_coverage = 0;
+            el._gator_coverage = 0;
             seq_els.push(el);
         });
 
@@ -8591,133 +8570,107 @@ MASCP.CondensedSequenceRenderer.prototype.setModhunterGradient = function() {
         return ret;
     };
 
-    // Given an ordered set of consolidated indeces, find the indeces of the negative space
-    var invertIndeces = function(inputIndex) {
-        var results = [];
-        var inputLength = inputIndex.length;
-        for (var n = 0; n < inputLength; n++) {
-            if (n == 0 && inputIndex[n][0] > 0) { results.push([0, Math.max(inputIndex[n][0]-1,0)]); }
-            if (n == inputLength-1 && inputIndex[n][1] < inputLength-1) { results.push([Math.min(inputIndex[n][1]+1,sequence.length-1), sequence.length-1]); }
-            if (n != 0 && n != inputLength-1) { results.push([inputIndex[n-1][1]+1, inputIndex[n][0]-1]); }
-        }
-
-        return results;
+    // Function to convert a sequence index to a percentage
+    // Returned value is a floating point between 0 and 1
+    var toPercent = function(index) {
+        return Math.min((index / seqLength), 1);
     };
 
-    // Function to convert consolidated peptides to percentages for mod_gradient
-    var toPercent = function(indecesList) {
+    // Function to convert a list of peptides into a list of sequence indeces
+    var convertToIndeces = function(peptideList) {
         var results = [];
 
-        var convertIndeces = function(inputIndex) {
-            var left = (inputIndex[0]/seqLength);
-            var right = (inputIndex[1]/seqLength);
-            // Apply an offset for better alignment in GATOR
-            return [Math.max(left-0.005,0), right-0.005];
-        };
-
-        // Check for gap at the beginning of protein
-        if (indecesList[0][0] > 5) {
-            results.push(convertIndeces([0, indecesList[0][0]]));
-        }
-        // Iterate through any gaps in the middle of protein
-        for (var l = 0; l < (indecesList.length-1); l++) {
-            if (indecesList[l+1][0] - indecesList[l][1] > 5) {
-                results.push(convertIndeces([indecesList[l][1], indecesList[l+1][0]]));
+        for (var i = 0; i < peptideList.length; i++) {
+            var hitIndex = sequence.indexOf(peptideList[i]);
+            if (hitIndex >= 0) {
+                results.push([hitIndex, (hitIndex+peptideList[i].length)]);
             }
-        }
-        // Check for gap at the end of protein
-        if (seqLength - indecesList[indecesList.length-1][1] > 5) {
-            results.push(convertIndeces([indecesList[indecesList.length-1][1], seqLength]));
         }
 
         return results;
     };
 
     // Function to find the indeces of areas in the sequence with no covereage
-    var consolidatePeptides = function(arr) {
-        var coveredIndeces = [];
-        var results = [];
-
-        // Populate array of the sequence indeces for found peptides
-        for (var i = 0; i < arr.length; i++) {
-            var hitIndex = sequence.indexOf(arr[i]);
-            if (hitIndex >= 0) {
-                coveredIndeces.push([hitIndex, (hitIndex+arr[i].length)]);
-            }
-        }
+    var consolidatePeptides = function(indecesList) {
+        var results = indecesList;
 
         // Consolidate overlapping or adjacent peptide indeces
-        for (var j = 0; j < (coveredIndeces.length-1); j++) {
-            var toDelete = [];
-            for (var k = j+1; k < coveredIndeces.length; k++) {
-                var a = coveredIndeces[j][0];
-                var b = coveredIndeces[j][1];
-                var c = coveredIndeces[k][0];
-                var d = coveredIndeces[k][1];
+        for (var j = 0; j < (results.length-1); j++) {
+            for (var k = j+1; k < results.length; k++) {
+                var a = results[j][0];
+                var b = results[j][1];
+                var c = results[k][0];
+                var d = results[k][1];
                 var hasChanged = false;
 
                 // Check if indeces are identical, or if one is contained in the other
-                if ((coveredIndeces[j] == coveredIndeces[k]) || (a <= c && b >= d)) {
-                    coveredIndeces.splice(k, 1);
+                if ((results[j] == results[k]) || (a <= c && b >= d)) {
+                    results.splice(k, 1);
                     k--;
                 }
                 // Check for overlap or adjacent indeces
                 else if ((a <= c && (b <= d && b >= c)) || ((a >= c && a <= d) && b >= d) || (a >= c && b <= d)) {
-                    coveredIndeces[j][0] = Math.min(a, c);
-                    coveredIndeces[j][1] = Math.max(b, d);
-                    coveredIndeces.splice(k, 1);
+                    results[j][0] = Math.min(a, c);
+                    results[j][1] = Math.max(b, d);
+                    results.splice(k, 1);
                     hasChanged = true;
                 }
-                // If a change was made, reset index
+                // If a change was made, reset index and restart search
                 if (hasChanged == true) { j = -1; break; }
             }
         }
 
-        coveredIndeces.sort(function(a,b) { if (a[0]<b[0]) {return -1;} else {return 1;} });
+        results.sort(function(a,b) { if (a[0]<b[0]) {return -1;} else {return 1;} });
 
-        return coveredIndeces;
+        return results;
     };
 
-    // Populate list with peptides from all readers except ProteotypicReader
-    var peps = [];
-    var predictedPeps = [];
+    // Look to see if there are peptides and if so, process them
+    var numPeps = 0;
     for (var reader in this._peptide_sequences) {
-        for (var l = 0; l < this._peptide_sequences[reader].length; l++) {
-            if (reader == 'proteotypic') {
-                predictedPeps.push(this._peptide_sequences[reader][l]);
-            } else {
-                peps.push(this._peptide_sequences[reader][l]);
+        var thisNumPeps = this._peptide_sequences[reader].length;
+        numPeps += thisNumPeps;
+        if (thisNumPeps > 0) {
+            this._peptide_sequences[reader] = sort_unique(this._peptide_sequences[reader]);
+            this._peptide_sequences[reader] = convertToIndeces(this._peptide_sequences[reader]);
+            this._peptide_sequences[reader] = consolidatePeptides(this._peptide_sequences[reader]);
+            for (var o = 0; o < this._peptide_sequences[reader].length; o++) {
+                for (var p = this._peptide_sequences[reader][o][0]; p < this._peptide_sequences[reader][o][1]; p++) {
+                    if (reader.indexOf('proteotypic') >= 0) {
+                        this._sequence_els[p]._predicted_coverage += 1;
+                    } else {
+                        this._sequence_els[p]._gator_coverage += 1;
+                    }
+                }
             }
         }
     }
 
-    if (peps.length > 0) {
+    if (numPeps > 0) {
+        var stopObject = {};
         // Set maximum confidence of modification suggestions based on total # of peptides in GATOR
-        var maxRating = peps.length / 40;
+        var maxRating = numPeps / 40;
         maxRating = (maxRating > 1) ? 1 : maxRating;
-        maxRating = Math.round(maxRating*4);
-        // Eliminate redundant peptides
-        peps = sort_unique(peps);
-        // Consolidate overlapping peptides
-        peps = consolidatePeptides(peps);
-        var percentages = toPercent(peps);
-        var predictedPercent = [];
-        // If there are predicted peptides for this AGI, populate this list
-        if (predictedPeps.length > 0) {
-            predictedPeps = sort_unique(predictedPeps);
-            predictedPeps = consolidatePeptides(predictedPeps);
-            predictedPeps = invertIndeces(predictedPeps);
-            predictedPercent = toPercent(predictedPeps);
+
+        // Iterate through amino acids and compute modhunter rating for each
+        for (var q = 0; q < this._sequence_els.length; q++) {
+            stopObject[q] = 0;
+            if (this._sequence_els[q]._gator_coverage <= 1) {
+                stopObject[q] += (2-this._sequence_els[q]._gator_coverage) * 25;
+                stopObject[q] += this._sequence_els[q]._predicted_coverage * 25;
+                stopObject[q] = Math.min(stopObject[q], 100);
+                stopObject[q] = stopObject[q] * maxRating;
+            }
         }
+
         // Create gradient object
         var canv = this._canvas;
         var defs = canv.parentNode.ownerDocument.getElementsByTagNameNS(svgns, 'defs')[0];
-        defs.appendChild(canv.mod_gradient('mod_gradient', percentages, predictedPercent, maxRating));
+        defs.appendChild(canv.mod_gradient('mod_gradient', stopObject, seqLength));
     }
     else {
         // Remove modhunter if no peptides are present in the database
-        var modLayer = MASCP.getLayer('modhunter');
-        this.removeTrack(modLayer);
+        this.removeTrack(MASCP.getLayer('modhunter'));
     }
 
     return this;

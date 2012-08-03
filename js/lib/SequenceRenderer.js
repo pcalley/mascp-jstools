@@ -423,7 +423,7 @@ MASCP.SequenceRenderer.prototype.setSequence = function(sequence)
         this.addToLayerWithLink = MASCP.SequenceRenderer.addElementToLayerWithLink;
         this._renderer = renderer;
     });
-    this._sequence_els = sequence_els;   
+    this._sequence_els = sequence_els;
     jQuery(this).trigger('sequenceChange');
 };
 
