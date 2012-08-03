@@ -1716,8 +1716,12 @@ var SVGCanvas = SVGCanvas || (function() {
                 // this.setAttribute('height',height);
                 var scale_val = setHeight.call(this,height);
                 this.setAttribute('height',height);
-                var top_offset = this.offset;                
-                var widget_width = this.firstChild.firstChild.getBBox().width;
+                var top_offset = this.offset;
+                try {
+                    var widget_width = this.firstChild.firstChild.getBBox().width;
+                } catch (e) {
+                    console.log('getBBox() threw error in canvas.growingMarker');
+                }
                 var widget_height = parseFloat(this.firstChild.firstChild.getAttribute('height'));
                 var centering_offset = 3/5*widget_height;
                 if (this.angle > 10) {
@@ -1981,7 +1985,8 @@ var SVGCanvas = SVGCanvas || (function() {
         };
     });
 
-})();/**
+})();
+/**
  *  @fileOverview   Basic classes and definitions for an SVG-based sequence renderer
  */
 
