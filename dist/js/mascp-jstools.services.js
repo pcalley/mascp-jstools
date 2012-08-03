@@ -1836,6 +1836,13 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
     var reader = this;
 
     this.bind('resultReceived', function() {
+        
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['atpeptide'] = [];
+        var thesePeptides = this.result.getPeptides();
+        for (var k = 0; k < thesePeptides.length; k++) {
+            sequenceRenderer._peptide_sequences['atpeptide'].push(thesePeptides[k].sequence);
+        }
 
         MASCP.registerGroup('atpeptide_experimental', {'fullname' : 'AtPeptide MS/MS', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
@@ -1880,7 +1887,8 @@ MASCP.AtPeptideReader.Result.prototype.render = function()
     } else {
         return null;
     }
-};/*
+};
+/*
 http://uniprot.org/mapping/?from=ACC+ID&to=REFSEQ_NT_ID&format=list&query=Q9UNA3
  */
 
@@ -2102,6 +2110,7 @@ MASCP.GelMapReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     };
 
     this.bind('resultReceived', function() {
+        sequenceRenderer._peptide_sequences['gelmap'] = [];
         for (var maps = this.result.maps, j = maps.length - 1; j >= 0; j--) {
             var a_map = maps[j];
             MASCP.registerLayer('gelmap_map_'+a_map.id, { 'fullname': a_map.title, 'group' : 'gelmap_experimental', 'color' : '#aaaaff', 'css' : css_block });
@@ -2110,6 +2119,10 @@ MASCP.GelMapReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 
             for(var i = peps.length - 1; i >= 0; i--) {
                 var peptide = peps[i];
+
+                // Append peptides to master list for modhunter
+                sequenceRenderer._peptide_sequences['gelmap'].push(peptide);
+
                 var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide);
                 var layer_name = 'gelmap_map_'+a_map.id;
                 peptide_bits.addToLayer(layer_name);
@@ -2954,6 +2967,14 @@ MASCP.Pep2ProReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     var reader = this;
 
     this.bind('resultReceived', function() {
+
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['pep2pro'] = [];
+        var thesePeptides = this.result.getPeptides();
+        for (var k = 0; k < thesePeptides.length; k++) {
+            sequenceRenderer._peptide_sequences['pep2pro'].push(thesePeptides[k]);
+        }
+
         MASCP.registerGroup('pep2pro',{ 'fullname' : 'Pep2Pro data','hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#000099' });
 
         if ( sequenceRenderer.sequence != this.result.sequence && this.result.sequence != '' ) {
@@ -3010,7 +3031,8 @@ MASCP.Pep2ProReader.prototype._mergeCounts = function(hash)
         }
     }
     return counts;
-};/** @fileOverview   Classes for reading data from the Phosphat database
+};
+/** @fileOverview   Classes for reading data from the Phosphat database
  */
 if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
@@ -3450,7 +3472,13 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     
     this.bind('resultReceived', function() {
         
-//        
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['ppdb'] = [];
+        var thesePeptides = this.result.getPeptides();
+        for (var k = 0; k < thesePeptides.length; k++) {
+            sequenceRenderer._peptide_sequences['ppdb'].push(thesePeptides[k].sequence);
+        }
+
         MASCP.registerGroup('ppdb', {'fullname' : 'PPDB spectra data', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#aa9900' });
 
         var overlay_name = 'ppdb_controller';
@@ -3861,13 +3889,7 @@ MASCP.PromexReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 
 MASCP.PromexReader.Result.prototype.render = function()
 {
-};/** @fileOverview   Classes for reading data from the Rippdb database
- */
-if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
-    throw "MASCP.Service is not defined, required class";
-}
-
-/** Default class constructor
+};/** Default class constructor
  *  @class      Service class that will retrieve data from Predicted Proteotypic Peptides for a given AGI.
  *  @param      {String} agi            Agi to look up
  *  @param      {String} endpointURL    Endpoint URL for this service
@@ -3893,6 +3915,8 @@ MASCP.ProteotypicReader.prototype.requestData = function()
     };
 };
 
+
+
 /**
  *  @class   Container class for results from the Proteotypic service
  *  @extends MASCP.Service.Result
@@ -3912,23 +3936,15 @@ MASCP.ProteotypicReader.Result.prototype.getPeptides = function()
         return this._peptides;
     }
 
-    this.spectra = {};
-    this._long_name_map = {};
-    
     if (! this._raw_data || ! this._raw_data.peptides ) {
         return [];
     }
-
         
     var peptides = [];
-    var toString = function() {
-        return this.sequence;
-    };
-    
+        
     for (var i = this._raw_data.peptides.length - 1; i >= 0; i-- ) {
         var a_peptide = this._raw_data.peptides[i];
-		var the_pep = { 'sequence' : a_peptide.sequence };
-        the_pep.toString = toString;
+		var the_pep = { 'sequence' : a_peptide.sequence, 'exp' : a_peptide.exp, 'pvalue' : a_peptide.pvalue };
         peptides.push(the_pep);
     }
     this._peptides = peptides;
@@ -3941,24 +3957,36 @@ MASCP.ProteotypicReader.prototype.setupSequenceRenderer = function(sequenceRende
 
     this.bind('resultReceived', function() {
 
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['proteotypic'] = [];
+        var thesePeptides = this.result.getPeptides();
+        for (var k = 0; k < thesePeptides.length; k++) {
+            sequenceRenderer._peptide_sequences['proteotypic'].push(thesePeptides[k].sequence);
+        }
+
         MASCP.registerGroup('proteotypic_experimental', {'fullname' : 'Expected Peptides', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
         var overlay_name = 'proteotypic_controller';
 
         var css_block = '.active .overlay { background: #ff5533; } .active a { color: #000000; text-decoration: none !important; }  :indeterminate { background: #ff0000; } .tracks .active { background: #0000ff; } .inactive a { text-decoration: none; } .inactive { display: none; }';
 
-        MASCP.registerLayer(overlay_name,{ 'fullname' : 'Expected Peptides', 'color' : '#ff5533', 'css' : css_block });
+        MASCP.registerLayer(overlay_name,{ 'fullname' : 'Predicted Peptides', 'color' : '#008000', 'css' : css_block });
 
         if (sequenceRenderer.createGroupController) {
             sequenceRenderer.createGroupController('proteotypic_controller','proteotypic_experimental');
         }
                 
         var peps = this.result.getPeptides();
-		MASCP.registerLayer('proteotypic_peptide_a', { 'fullname': 'Expected Peptides', 'group' : 'proteotypic_experimental', 'color' : '#ff5533', 'css' : css_block });
+        var exps_done = '';
 		for(var i = 0; i < peps.length; i++) {
+            var an_exp = peps[i].exp;
+            if ( exps_done.search(an_exp) < 0 ) {
+                MASCP.registerLayer('proteotypic_peptide_'+an_exp, { 'fullname': an_exp.replace('_', '/'), 'group' : 'proteotypic_experimental', 'color' : '#008000', 'css' : css_block });
+                exps_done = exps_done + an_exp;
+            }
 			var peptide = peps[i].sequence;
 			var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide);
-			var layer_name = 'proteotypic_peptide_a';
+			var layer_name = 'proteotypic_peptide_'+an_exp;
 			peptide_bits.addToLayer(layer_name);
 			peptide_bits.addToLayer(overlay_name);
 		}
@@ -3985,6 +4013,11 @@ if ( typeof MASCP === 'undefined' || typeof MASCP.Service === 'undefined' ) {
     throw "MASCP.Service is not defined, required class";
 }
 
+/** @fileOverview   Classes for reading data from the Rippdb database
+ */
+if ( typeof MASCP == 'undefined' || typeof MASCP.Service == 'undefined' ) {
+    throw "MASCP.Service is not defined, required class";
+}
 
 /** Default class constructor
  *  @class      Service class that will retrieve data from Rippdb for a given AGI.

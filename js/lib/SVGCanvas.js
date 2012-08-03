@@ -320,10 +320,7 @@ var SVGCanvas = SVGCanvas || (function() {
         var curr_scale = scale_re.exec(curr_transform);
     
         var curr_height = parseFloat(this.getAttribute('height') || 1);
-        console.log("curr height is "+curr_height);
-        console.log("target height is "+height);
-        console.log("current scale is "+curr_scale[1]);
-        console.log(curr_transform);
+
         var new_scale = 1;
         if (curr_scale === null) {
             curr_transform += ' scale(1) ';
@@ -332,8 +329,8 @@ var SVGCanvas = SVGCanvas || (function() {
             curr_scale = parseFloat(curr_scale[1]);
         }
         new_scale = ( parseFloat(height) / curr_height ) * curr_scale;
+
         curr_transform = curr_transform.replace(scale_re,'scale('+new_scale+')');
-        console.log(curr_transform);
 
         this.setAttribute('transform',curr_transform);
         this.setAttribute('height',height);
@@ -377,7 +374,63 @@ var SVGCanvas = SVGCanvas || (function() {
             }
             return gradient;
         };
+        
+        /*  Creates gradient for the modhunter track
+        *  Arguments:
+        *       id: string containing id of gradient
+        *       locations: an array of two-member arrays containing start and end
+        *                   points of each gradient, from 0-100 percent
+        *       maxRating: integer from 0-9 representing max confidence rating of
+        *                   suggested modification sites
+        */
+        canvas.mod_gradient = function(id,locations,predictedLocations,maxRating) {
+            var gradient = this.makeEl('linearGradient',{
+                'id': id,
+                'x1':'0%',
+                'x2':'100%',
+                'y1':'0%',
+                'y2':'0%'
+            });
 
+            while(locations.length > 0) {
+                var locate = locations.shift();
+                var isPredicted = false;
+                for (var i = 0; i < predictedLocations.length; i++) {
+                    var a = locate[0];
+                    var b = locate[1];
+                    var c = predictedLocations[i][0];
+                    var d = predictedLocations[i][1];
+                    
+                    // Set the isPredicted flag if there is overlap with a predicted peptide
+                    if ((c <= a && d >= a && d-a >= (b-a)*0.5) || (c <= b && c >= a && b-c >= (b-a)*0.5)) {
+                        isPredicted = true;
+                    }
+                }
+                var thisRating = 9 - (maxRating + (isPredicted == true ? 5 : 0));
+                var colorStr = '' + thisRating + thisRating;
+                if (locate[0] >= 0.005) {
+                    gradient.appendChild(this.makeEl('stop',{
+                        'offset':(locate[0]-0.005),
+                        'style':'stop-color:#ccc;stop-opacity:1'
+                    }));
+                }
+                gradient.appendChild(this.makeEl('stop',{
+                    'offset': (locate[0] > 0) ? (locate[0]+0.005) : 0,
+                    'style':'stop-color:#f'+colorStr+';stop-opacity:1'
+                }));
+                gradient.appendChild(this.makeEl('stop',{
+                    'offset': (locate[1] < 1) ? (locate[1]-0.005) : 1,
+                    'style':'stop-color:#f'+colorStr+';stop-opacity:1'
+                }));
+                if (locate[1] <= 0.995) {
+                    gradient.appendChild(this.makeEl('stop',{
+                        'offset':(locate[1]+0.005),
+                        'style':'stop-color:#ccc;stop-opacity:1'
+                    }));
+                }
+            }
+            return gradient;
+        };
 
         canvas.path = function(pathdesc) {
           var a_path = document.createElementNS(svgns,'path');
@@ -564,8 +617,12 @@ var SVGCanvas = SVGCanvas || (function() {
                 // this.setAttribute('height',height);
                 var scale_val = setHeight.call(this,height);
                 this.setAttribute('height',height);
-                var top_offset = this.offset;                
-                var widget_width = this.firstChild.firstChild.getBBox().width;
+                var top_offset = this.offset;
+                try {
+                    var widget_width = this.firstChild.firstChild.getBBox().width;
+                } catch (e) {
+                    console.log('getBBox() threw error in canvas.growingMarker');
+                }
                 var widget_height = parseFloat(this.firstChild.firstChild.getAttribute('height'));
                 var centering_offset = 3/5*widget_height;
                 if (this.angle > 10) {

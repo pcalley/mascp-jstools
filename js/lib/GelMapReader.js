@@ -100,6 +100,7 @@ MASCP.GelMapReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     };
 
     this.bind('resultReceived', function() {
+        sequenceRenderer._peptide_sequences['gelmap'] = [];
         for (var maps = this.result.maps, j = maps.length - 1; j >= 0; j--) {
             var a_map = maps[j];
             MASCP.registerLayer('gelmap_map_'+a_map.id, { 'fullname': a_map.title, 'group' : 'gelmap_experimental', 'color' : '#aaaaff', 'css' : css_block });
@@ -108,6 +109,10 @@ MASCP.GelMapReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 
             for(var i = peps.length - 1; i >= 0; i--) {
                 var peptide = peps[i];
+
+                // Append peptides to master list for modhunter
+                sequenceRenderer._peptide_sequences['gelmap'].push(peptide);
+
                 var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide);
                 var layer_name = 'gelmap_map_'+a_map.id;
                 peptide_bits.addToLayer(layer_name);

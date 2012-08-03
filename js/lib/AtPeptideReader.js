@@ -107,6 +107,13 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
     var reader = this;
 
     this.bind('resultReceived', function() {
+        
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['atpeptide'] = [];
+        var thesePeptides = this.result.getPeptides();
+        for (var k = 0; k < thesePeptides.length; k++) {
+            sequenceRenderer._peptide_sequences['atpeptide'].push(thesePeptides[k].sequence);
+        }
 
         MASCP.registerGroup('atpeptide_experimental', {'fullname' : 'AtPeptide MS/MS', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
