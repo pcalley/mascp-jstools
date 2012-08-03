@@ -135,13 +135,6 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     var reader = this;
     
     this.bind('resultReceived', function() {
-        
-        // Append peptide sequences to master list for modhunter
-        sequenceRenderer._peptide_sequences['ppdb'] = [];
-        var thesePeptides = this.result.getPeptides();
-        for (var k = 0; k < thesePeptides.length; k++) {
-            sequenceRenderer._peptide_sequences['ppdb'].push(thesePeptides[k].sequence);
-        }
 
         MASCP.registerGroup('ppdb', {'fullname' : 'PPDB spectra data', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#aa9900' });
 
@@ -156,6 +149,13 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
         }
         
         var peps = this.result.getPeptides();
+
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['ppdb'] = [];
+        for (var k = 0; k < peps.length; k++) {
+            sequenceRenderer._peptide_sequences['ppdb'].push(peps[k].sequence);
+        }
+
         var experiments = this.result.getExperiments();
         for(var i = 0; i < experiments.length; i++) {
             var layer_name = 'ppdb_experiment'+experiments[i];

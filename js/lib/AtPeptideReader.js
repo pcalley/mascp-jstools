@@ -107,13 +107,6 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
     var reader = this;
 
     this.bind('resultReceived', function() {
-        
-        // Append peptide sequences to master list for modhunter
-        sequenceRenderer._peptide_sequences['atpeptide'] = [];
-        var thesePeptides = this.result.getPeptides();
-        for (var k = 0; k < thesePeptides.length; k++) {
-            sequenceRenderer._peptide_sequences['atpeptide'].push(thesePeptides[k].sequence);
-        }
 
         MASCP.registerGroup('atpeptide_experimental', {'fullname' : 'AtPeptide MS/MS', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
@@ -128,6 +121,13 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
         }
                 
         var peps = this.result.getPeptides();
+
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['atpeptide'] = [];
+        for (var k = 0; k < peps.length; k++) {
+            sequenceRenderer._peptide_sequences['atpeptide'].push(peps[k].sequence);
+        }
+
         for (var j = 0; j < this.result.tissues().length; j++ ) {
             var a_tissue = this.result.tissues()[j];
             MASCP.registerLayer('atpeptide_peptide_'+a_tissue, { 'fullname': this.result._long_name_map[a_tissue], 'group' : 'atpeptide_experimental', 'color' : '#ff5533', 'css' : css_block });

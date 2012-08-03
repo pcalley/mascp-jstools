@@ -383,7 +383,7 @@ var SVGCanvas = SVGCanvas || (function() {
         *       maxRating: integer from 0-9 representing max confidence rating of
         *                   suggested modification sites
         */
-        canvas.mod_gradient = function(id,locations,predictedLocations,maxRating) {
+        canvas.mod_gradient = function(id, stopObject, seqLength) {
             var gradient = this.makeEl('linearGradient',{
                 'id': id,
                 'x1':'0%',
@@ -392,43 +392,16 @@ var SVGCanvas = SVGCanvas || (function() {
                 'y2':'0%'
             });
 
-            while(locations.length > 0) {
-                var locate = locations.shift();
-                var isPredicted = false;
-                for (var i = 0; i < predictedLocations.length; i++) {
-                    var a = locate[0];
-                    var b = locate[1];
-                    var c = predictedLocations[i][0];
-                    var d = predictedLocations[i][1];
-                    
-                    // Set the isPredicted flag if there is overlap with a predicted peptide
-                    if ((c <= a && d >= a && d-a >= (b-a)*0.5) || (c <= b && c >= a && b-c >= (b-a)*0.5)) {
-                        isPredicted = true;
-                    }
-                }
-                var thisRating = 9 - (maxRating + (isPredicted == true ? 5 : 0));
-                var colorStr = '' + thisRating + thisRating;
-                if (locate[0] >= 0.005) {
-                    gradient.appendChild(this.makeEl('stop',{
-                        'offset':(locate[0]-0.005),
-                        'style':'stop-color:#ccc;stop-opacity:1'
-                    }));
-                }
+            for (var stop in stopObject) {
+                var thisPercent = stop / seqLength;
+                var colorStr = '' + 255-(Math.round((stopObject[stop]/100)*255));
+
                 gradient.appendChild(this.makeEl('stop',{
-                    'offset': (locate[0] > 0) ? (locate[0]+0.005) : 0,
-                    'style':'stop-color:#f'+colorStr+';stop-opacity:1'
+                    'offset': thisPercent.toString(),
+                    'style':'stop-color:rgb(255,'+colorStr+','+colorStr+');stop-opacity:1'
                 }));
-                gradient.appendChild(this.makeEl('stop',{
-                    'offset': (locate[1] < 1) ? (locate[1]-0.005) : 1,
-                    'style':'stop-color:#f'+colorStr+';stop-opacity:1'
-                }));
-                if (locate[1] <= 0.995) {
-                    gradient.appendChild(this.makeEl('stop',{
-                        'offset':(locate[1]+0.005),
-                        'style':'stop-color:#ccc;stop-opacity:1'
-                    }));
-                }
             }
+
             return gradient;
         };
 

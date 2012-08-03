@@ -1836,13 +1836,6 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
     var reader = this;
 
     this.bind('resultReceived', function() {
-        
-        // Append peptide sequences to master list for modhunter
-        sequenceRenderer._peptide_sequences['atpeptide'] = [];
-        var thesePeptides = this.result.getPeptides();
-        for (var k = 0; k < thesePeptides.length; k++) {
-            sequenceRenderer._peptide_sequences['atpeptide'].push(thesePeptides[k].sequence);
-        }
 
         MASCP.registerGroup('atpeptide_experimental', {'fullname' : 'AtPeptide MS/MS', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
@@ -1857,6 +1850,13 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
         }
                 
         var peps = this.result.getPeptides();
+
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['atpeptide'] = [];
+        for (var k = 0; k < peps.length; k++) {
+            sequenceRenderer._peptide_sequences['atpeptide'].push(peps[k].sequence);
+        }
+
         for (var j = 0; j < this.result.tissues().length; j++ ) {
             var a_tissue = this.result.tissues()[j];
             MASCP.registerLayer('atpeptide_peptide_'+a_tissue, { 'fullname': this.result._long_name_map[a_tissue], 'group' : 'atpeptide_experimental', 'color' : '#ff5533', 'css' : css_block });
@@ -3471,13 +3471,6 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
     var reader = this;
     
     this.bind('resultReceived', function() {
-        
-        // Append peptide sequences to master list for modhunter
-        sequenceRenderer._peptide_sequences['ppdb'] = [];
-        var thesePeptides = this.result.getPeptides();
-        for (var k = 0; k < thesePeptides.length; k++) {
-            sequenceRenderer._peptide_sequences['ppdb'].push(thesePeptides[k].sequence);
-        }
 
         MASCP.registerGroup('ppdb', {'fullname' : 'PPDB spectra data', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#aa9900' });
 
@@ -3492,6 +3485,13 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
         }
         
         var peps = this.result.getPeptides();
+
+        // Append peptide sequences to master list for modhunter
+        sequenceRenderer._peptide_sequences['ppdb'] = [];
+        for (var k = 0; k < peps.length; k++) {
+            sequenceRenderer._peptide_sequences['ppdb'].push(peps[k].sequence);
+        }
+
         var experiments = this.result.getExperiments();
         for(var i = 0; i < experiments.length; i++) {
             var layer_name = 'ppdb_experiment'+experiments[i];
@@ -3775,13 +3775,6 @@ MASCP.ProteotypicReader.prototype.setupSequenceRenderer = function(sequenceRende
 
     this.bind('resultReceived', function() {
 
-        // Append peptide sequences to master list for modhunter
-        sequenceRenderer._peptide_sequences['proteotypic'] = [];
-        var thesePeptides = this.result.getPeptides();
-        for (var k = 0; k < thesePeptides.length; k++) {
-            sequenceRenderer._peptide_sequences['proteotypic'].push(thesePeptides[k].sequence);
-        }
-
         MASCP.registerGroup('proteotypic_experimental', {'fullname' : 'Expected Peptides', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff5533' });
 
         var overlay_name = 'proteotypic_controller';
@@ -3795,6 +3788,17 @@ MASCP.ProteotypicReader.prototype.setupSequenceRenderer = function(sequenceRende
         }
                 
         var peps = this.result.getPeptides();
+
+        // Append peptide sequences to master list for modhunter
+        // Predictions for each experimental type are put in separate containers
+        for (var k = 0; k < peps.length; k++) {
+            // If a container for this exp type doesn't exist, create it
+            if (sequenceRenderer._peptide_sequences.hasOwnProperty('proteotypic'+peps[k].exp) == false) {
+                sequenceRenderer._peptide_sequences['proteotypic'+peps[k].exp] = [];
+            }
+            sequenceRenderer._peptide_sequences['proteotypic'+peps[k].exp].push(peps[k].sequence);
+        }
+
         var exps_done = '';
 		for(var i = 0; i < peps.length; i++) {
             var an_exp = peps[i].exp;
