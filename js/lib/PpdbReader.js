@@ -147,14 +147,11 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
         if (sequenceRenderer.createGroupController) {
             sequenceRenderer.createGroupController('ppdb_controller','ppdb');
         }
-        
+
         var peps = this.result.getPeptides();
 
-        // Append peptide sequences to master list for modhunter
+        // Initialize peptide list for modhunter
         sequenceRenderer._peptide_sequences['ppdb'] = [];
-        for (var k = 0; k < peps.length; k++) {
-            sequenceRenderer._peptide_sequences['ppdb'].push(peps[k].sequence);
-        }
 
         var experiments = this.result.getExperiments();
         for(var i = 0; i < experiments.length; i++) {
@@ -169,6 +166,9 @@ MASCP.PpdbReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
                 var peptide_bits = sequenceRenderer.getAminoAcidsByPeptide(peptide.sequence);
                 peptide_bits.addToLayer(layer_name);
                 peptide_bits.addToLayer(overlay_name);
+
+                // Append peptide sequences to master list for modhunter
+                sequenceRenderer._peptide_sequences['ppdb'].push(peptide.sequence);
             }
         }
         jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);        

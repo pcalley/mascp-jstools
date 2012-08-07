@@ -414,6 +414,7 @@ MASCP.CondensedSequenceRenderer.prototype = new MASCP.SequenceRenderer();
             el.amino_acid = this;
             el._predicted_coverage = 0;
             el._gator_coverage = 0;
+            el._reader_coverage = 0;
             seq_els.push(el);
         });
 
@@ -725,18 +726,25 @@ MASCP.CondensedSequenceRenderer.prototype.setModhunterGradient = function() {
     var numPeps = 0;
     for (var reader in this._peptide_sequences) {
         var thisNumPeps = this._peptide_sequences[reader].length;
+        // rdrCoverageList keeps track of indeces whose _reader_coverage property have
+        //      already been incremented for this reader
+        var rdrCoverageList = [];
         numPeps += thisNumPeps;
         if (thisNumPeps > 0) {
-            this._peptide_sequences[reader] = sort_unique(this._peptide_sequences[reader]);
             this._peptide_sequences[reader] = convertToIndeces(this._peptide_sequences[reader]);
-            this._peptide_sequences[reader] = consolidatePeptides(this._peptide_sequences[reader]);
+            // For each peptide, increment coverage properties for the residues within the peptide
             for (var o = 0; o < this._peptide_sequences[reader].length; o++) {
                 for (var p = this._peptide_sequences[reader][o][0]; p < this._peptide_sequences[reader][o][1]; p++) {
                     if (reader.indexOf('proteotypic') >= 0) {
                         this._sequence_els[p]._predicted_coverage += 1;
                     } else {
                         this._sequence_els[p]._gator_coverage += 1;
+                        if (rdrCoverageList.indexOf(p) < 0) {
+                            this._sequence_els[p]._reader_coverage += 1;
+                            rdrCoverageList.push(p);
+                        }
                     }
+                    
                 }
             }
         }
@@ -748,15 +756,16 @@ MASCP.CondensedSequenceRenderer.prototype.setModhunterGradient = function() {
         var maxRating = numPeps / 40;
         maxRating = (maxRating > 1) ? 1 : maxRating;
 
-        // Iterate through amino acids and compute modhunter rating for each
+        // Iterate through amino acids and compute modhunter rating from 0-100 for each
         for (var q = 0; q < this._sequence_els.length; q++) {
             stopObject[q] = 0;
-            if (this._sequence_els[q]._gator_coverage <= 1) {
-                stopObject[q] += (2-this._sequence_els[q]._gator_coverage) * 25;
-                stopObject[q] += this._sequence_els[q]._predicted_coverage * 25;
-                stopObject[q] = Math.min(stopObject[q], 100);
-                stopObject[q] = stopObject[q] * maxRating;
-            }
+            var thisRating = 0;
+            thisRating += (4 - this._sequence_els[q]._gator_coverage) * 9;
+            thisRating += this._sequence_els[q]._predicted_coverage * 22;
+            thisRating -= this._sequence_els[q]._reader_coverage * 20;
+            thisRating = Math.max(Math.min(thisRating, 100), 0);
+            thisRating = thisRating * maxRating;
+            stopObject[q] = thisRating;
         }
 
         // Create gradient object

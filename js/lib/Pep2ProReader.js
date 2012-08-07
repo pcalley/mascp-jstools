@@ -113,15 +113,21 @@ MASCP.Pep2ProReader.Result.prototype._populate_peptides = function(data)
     if ( ! data || ! data.peptides ) {
         return;
     }
-        
+
     this.sequence = data.sequence;
     this._peptides = [];
-    
+
+    // Create _peptide_sequences list for Modhunter
+    this._peptide_sequences = [];
+
     for (var i = 0; i < data.peptides.length; i++ ) {
         var a_peptide = data.peptides[i];
         this._peptides.push(a_peptide.sequence);
         var peptide_position = a_peptide.position+'-'+(parseInt(a_peptide.position,10)+parseInt(a_peptide.sequence.length,10));
         for (var j = 0; j < a_peptide.tissues.length; j++ ) {
+            // Add peptides to list for Modhunter
+            this._peptide_sequences.push(a_peptide.sequence);
+
             var a_tissue = a_peptide.tissues[j];
             if (! this.peptide_counts_by_tissue[a_tissue['PO:tissue']]) {
                 this.peptide_counts_by_tissue[a_tissue['PO:tissue']] = {};
@@ -157,13 +163,13 @@ MASCP.Pep2ProReader.prototype._rendererRunner = function(sequenceRenderer) {
         var peptide_counts = this.result.peptide_counts_by_tissue[tissue];
 
         var overlay_name = 'pep2pro_by_tissue_'+tissue;
-    
+
         // var css_block = ' .overlay { display: none; } .active .overlay { display: block; top: 0px; background: #000099; } ';
-    
+
         var css_block = ' .overlay { display: none; } .tracks .active { fill: #000099; } .inactive { display: none; } .active .overlay { display: block; top: 0px; background: #000099; } ';
-    
+
         MASCP.registerLayer(overlay_name,{ 'fullname' : this.result._long_name_map[tissue], 'group' : 'pep2pro', 'color' : '#000099', 'css' : css_block, 'data' : { 'po' : tissue, 'count' : peptide_counts } });
-            
+
         var positions = this._normalise(this._mergeCounts(peptide_counts));
         var index = 1;
         var last_start = null;
@@ -171,7 +177,7 @@ MASCP.Pep2ProReader.prototype._rendererRunner = function(sequenceRenderer) {
             if ( last_start !== null ) {
                 if ((typeof positions[index] === 'undefined') || (index == positions.length)) {
                     sequenceRenderer.getAminoAcidsByPosition([last_start])[0].addBoxOverlay(overlay_name,index-1-last_start);
-                    last_start = null;                    
+                    last_start = null;
                 }
             }
             if (positions[index] > 0 && last_start === null) {
@@ -212,7 +218,7 @@ MASCP.Pep2ProReader.prototype._groupSummary = function(sequenceRenderer)
                         positions[i] = {};
                         positions[i].tissue = tissue_func;
                     }
-                    positions[i][tissue] = true;              
+                    positions[i][tissue] = true;
                 }
             }
         }
@@ -265,12 +271,7 @@ MASCP.Pep2ProReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 
     this.bind('resultReceived', function() {
 
-        // Append peptide sequences to master list for modhunter
-        sequenceRenderer._peptide_sequences['pep2pro'] = [];
-        var thesePeptides = this.result.getPeptides();
-        for (var k = 0; k < thesePeptides.length; k++) {
-            sequenceRenderer._peptide_sequences['pep2pro'].push(thesePeptides[k]);
-        }
+        
 
         MASCP.registerGroup('pep2pro',{ 'fullname' : 'Pep2Pro data','hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#000099' });
 
@@ -287,6 +288,10 @@ MASCP.Pep2ProReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
             reader._groupSummary(sequenceRenderer);
             reader._rendererRunner(sequenceRenderer);
             jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);
+        }
+        // Populate master list for modhunter
+        if (this.result._peptide_sequences) {
+            sequenceRenderer._peptide_sequences['pep2pro'] = this.result._peptide_sequences;
         }
     });
 
