@@ -806,8 +806,11 @@ var addElementToLayer = function(layerName) {
             return renderer._visibleTracers();
         };
     }
-    var tracer_marker = canvas.marker(this._index+0.5,10,0.5,layerName.charAt(0).toUpperCase());
-    
+    if ( layerName.charAt(0) == 'g' ) {
+	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,'CLO');
+    }else{ 
+	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,layerName.charAt(0).toUpperCase());
+    } 
     // tracer_marker.zoom_level = 'text';
     tracer_marker.setAttribute('visibility','hidden');
 
