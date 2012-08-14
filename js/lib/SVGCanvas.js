@@ -320,10 +320,10 @@ var SVGCanvas = SVGCanvas || (function() {
         var curr_scale = scale_re.exec(curr_transform);
     
         var curr_height = parseFloat(this.getAttribute('height') || 1);
-        console.log("curr height is "+curr_height);
-        console.log("target height is "+height);
-        console.log("current scale is "+curr_scale[1]);
-        console.log(curr_transform);
+        // console.log("curr height is "+curr_height);
+        // console.log("target height is "+height);
+        // console.log("current scale is "+curr_scale[1]);
+        // console.log(curr_transform);
         var new_scale = 1;
         if (curr_scale === null) {
             curr_transform += ' scale(1) ';
@@ -333,7 +333,7 @@ var SVGCanvas = SVGCanvas || (function() {
         }
         new_scale = ( parseFloat(height) / curr_height ) * curr_scale;
         curr_transform = curr_transform.replace(scale_re,'scale('+new_scale+')');
-        console.log(curr_transform);
+        // console.log(curr_transform);
 
         this.setAttribute('transform',curr_transform);
         this.setAttribute('height',height);
@@ -434,6 +434,125 @@ var SVGCanvas = SVGCanvas || (function() {
     //      a_rect.setAttribute('shape-rendering','optimizeSpeed');
           this.appendChild(a_rect);
           return a_rect;
+        };
+
+        // Popup object to be attached to hover events on peptide objects (aka BoxOverlays)
+        canvas.popup = function(mouseX,mouseY,clientX,popupData) {
+            // Correct mouse cursor location
+            var actualMouseX = mouseX - 7;
+            var actualMouseY = mouseY - 130;
+
+            // Set popup location relative to mouse cursor
+            if ( clientX >= window.innerWidth / 2 ) {
+                var offsetX = -370;
+                var polyOffsetX = -20;
+            }
+            else {
+                var offsetX = 20;
+                var polyOffsetX = 20;
+            }
+
+            // Create container for popup
+            var a_popup = document.createElementNS(svgns,'g');
+            a_popup.setAttribute('id','popup');
+            // Create main popup body
+            var popup_rect = document.createElementNS(svgns, 'rect');
+            popup_rect.setAttribute('x', actualMouseX+offsetX);
+            popup_rect.setAttribute('width', 350);
+            popup_rect.setAttribute('rx', 10);
+            popup_rect.setAttribute('ry', 10);
+            popup_rect.setAttribute('stroke','#000000');
+            popup_rect.setAttribute('stroke-width',2);
+            popup_rect.setAttribute('fill','#ffffff');
+            a_popup.appendChild(popup_rect);
+
+            // Create arrow from mouse location to popup body
+            var popup_poly = document.createElementNS(svgns, 'polygon');
+            var polyX = (actualMouseX+polyOffsetX);
+            popup_poly.setAttribute('points',(actualMouseX)+','+(actualMouseY)+' '+polyX+','+(actualMouseY-10)+' '+polyX+','+(actualMouseY+10));
+            popup_poly.setAttribute('stroke','#000000');
+            popup_poly.setAttribute('stroke-width',2);
+            popup_poly.setAttribute('fill','#ffffff');
+            a_popup.appendChild(popup_poly);
+
+            // Cover up black line at intersection of popup_rect and popup_poly
+            var popup_line = document.createElementNS(svgns, 'polyline');
+            popup_line.setAttribute('points',(polyX)+','+(actualMouseY-9)+' '+(polyX)+','+(actualMouseY+9));
+            popup_line.setAttribute('stroke','#ffffff');
+            popup_line.setAttribute('stroke-width',3);
+            a_popup.appendChild(popup_line);
+
+            // Initialize line counter k. SVG doesn't support wordwrap, so we'll do this manually
+            var k = 0;
+            // Initialize title counter l
+            var m = 0;
+            // Fill popup content from popupData argument
+            if (popupData) {
+                var textX = actualMouseX+offsetX+10;
+                lineHeight = 12;
+                lineLength = 38;
+                fontSize = '14px';
+
+                // Create main text container
+                var popupTextContainer = document.createElementNS(svgns, 'text');
+                popupTextContainer.setAttribute('x', textX);
+                popupTextContainer.setAttribute('font-family','monospace');
+                popupTextContainer.setAttribute('font-size',fontSize);
+                popupTextContainer.setAttribute('pointer-events','visiblePainted');
+                a_popup.appendChild(popupTextContainer);
+
+                // Iterate over data to be displayed
+                var firstTitle = true;
+                for (var popupKey in popupData) {
+                    m++;
+                    var popupValue = new String(popupData[popupKey]);
+                    var newPopupElTitle = document.createElementNS(svgns, 'tspan');
+                    newPopupElTitle.textContent = popupKey + ': ';
+                    newPopupElTitle.setAttribute('x', textX);
+                    newPopupElTitle.setAttribute('dy', (firstTitle == true ? 0 : lineHeight+4));
+                    popupTextContainer.appendChild(newPopupElTitle);
+                    // titleLength is in characters; titleWidth is in pixels
+                    var titleLength = popupKey.length;
+                    var titleWidth = (titleLength * 8) + 16;
+                    var contentLength = lineLength - titleLength;
+                    // Split text into multiple lines
+                    var firstLine = true;
+                    var contentWritten = 0;
+                    var contentSize = popupValue.length;
+                    var lastIndex = 0;
+                    while (lastIndex < contentSize) {
+                        var newPopupElLine = document.createElementNS(svgns, 'tspan');
+                        newPopupElLine.setAttribute('x', textX+titleWidth);
+                        newPopupElLine.setAttribute('dy',(firstLine == true ? 0 : lineHeight));
+                        var thisLineLength = 0;
+                        if (lastIndex + contentLength >= contentSize) {
+                            thisLineLength = contentLength;
+                        } else {
+                            // Check for spaces and preserve whole words if present
+                            for (var l = contentLength; l > 0; l--) {
+                                var searchIndex = lastIndex + l;
+                                if (popupValue.substring(searchIndex, searchIndex+1) == ' ') { break; }
+                            }
+                            thisLineLength = (l == 0 ? contentLength : l);
+                        }
+                        newPopupElLine.textContent = popupValue.substring(lastIndex, lastIndex+thisLineLength).trim();
+                        lastIndex += thisLineLength;
+                        popupTextContainer.appendChild(newPopupElLine);
+                        if (firstLine == true) { firstLine = false; }
+                        k++;
+                    }
+                    if (firstTitle == true) { firstTitle = false; }
+                }
+            }
+
+            // Set size and y-position based on amount of text displayed
+            var popupHeight = (k * 12) + ((m>=1 ? m-1 : 0) * 4) + 30;
+            popup_rect.setAttribute('height', popupHeight);
+            popupTextContainer.setAttribute('y', actualMouseY-(popupHeight/2)+20);
+            popup_rect.setAttribute('y', actualMouseY-(popupHeight/2));
+
+            this.parentNode.appendChild(a_popup);
+            return a_popup;
         };
 
         canvas.use = function(ref,x,y,width,height) {
@@ -564,7 +683,7 @@ var SVGCanvas = SVGCanvas || (function() {
                 // this.setAttribute('height',height);
                 var scale_val = setHeight.call(this,height);
                 this.setAttribute('height',height);
-                var top_offset = this.offset;                
+                var top_offset = this.offset;
                 var widget_width = this.firstChild.firstChild.getBBox().width;
                 var widget_height = parseFloat(this.firstChild.firstChild.getAttribute('height'));
                 var centering_offset = 3/5*widget_height;
