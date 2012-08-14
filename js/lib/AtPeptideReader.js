@@ -119,14 +119,10 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
         if (sequenceRenderer.createGroupController) {
             sequenceRenderer.createGroupController('atpeptide_controller','atpeptide_experimental');
         }
-                
+
         var peps = this.result.getPeptides();
 
-        // Append peptide sequences to master list for modhunter
         sequenceRenderer._peptide_sequences['atpeptide'] = [];
-        for (var k = 0; k < peps.length; k++) {
-            sequenceRenderer._peptide_sequences['atpeptide'].push(peps[k].sequence);
-        }
 
         for (var j = 0; j < this.result.tissues().length; j++ ) {
             var a_tissue = this.result.tissues()[j];
@@ -140,6 +136,9 @@ MASCP.AtPeptideReader.prototype.setupSequenceRenderer = function(sequenceRendere
                 var layer_name = 'atpeptide_peptide_'+a_tissue;
                 peptide_bits.addToLayer(layer_name);
                 peptide_bits.addToLayer(overlay_name);
+
+                // Append peptide sequences to master list for modhunter
+                sequenceRenderer._peptide_sequences['atpeptide'].push(peptide);
             }
         }
         jQuery(sequenceRenderer).trigger('resultsRendered',[reader]);
