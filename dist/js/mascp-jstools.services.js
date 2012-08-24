@@ -2136,7 +2136,7 @@ MASCP.GelMapReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 MASCP.GelMapReader.Result.prototype.render = function()
 {
 };
-/**
+/*
  * @fileOverview    Classes for reading GlycoMod data
  */
 
@@ -2219,7 +2219,7 @@ MASCP.GlycoModReader.prototype.setupSequenceRenderer = function(sequenceRenderer
         if (peps.length > 0) {
             MASCP.registerLayer(overlay_name,{ 'fullname' : 'GlycoMod (mod)', 'color' : '#ff00ff', 'css' : css_block });
 
-            MASCP.registerGroup('glycomod_peptides', {'fullname' : 'Glycosilation Publication ', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff00ff' });
+            MASCP.registerGroup('glycomod_peptides', {'fullname' : 'GlycoMod ', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff00ff' });
             if (sequenceRenderer.createGroupController) {
                 sequenceRenderer.createGroupController('glycomod_experimental','glycomod_peptides');
             }

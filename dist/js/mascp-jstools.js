@@ -2480,7 +2480,7 @@ MASCP.GelMapReader.prototype.setupSequenceRenderer = function(sequenceRenderer)
 MASCP.GelMapReader.Result.prototype.render = function()
 {
 };
-/**
+/*
  * @fileOverview    Classes for reading GlycoMod data
  */
 
@@ -2563,7 +2563,7 @@ MASCP.GlycoModReader.prototype.setupSequenceRenderer = function(sequenceRenderer
         if (peps.length > 0) {
             MASCP.registerLayer(overlay_name,{ 'fullname' : 'GlycoMod (mod)', 'color' : '#ff00ff', 'css' : css_block });
 
-            MASCP.registerGroup('glycomod_peptides', {'fullname' : 'Glycosilation Publication ', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff00ff' });
+            MASCP.registerGroup('glycomod_peptides', {'fullname' : 'GlycoMod ', 'hide_member_controllers' : true, 'hide_group_controller' : true, 'color' : '#ff00ff' });
             if (sequenceRenderer.createGroupController) {
                 sequenceRenderer.createGroupController('glycomod_experimental','glycomod_peptides');
             }
@@ -7962,7 +7962,7 @@ var SVGCanvas = SVGCanvas || (function() {
             marker.setHeight = setHeight;
             marker.setAttribute('height', dim.R*RS);
             if (typeof symbol == 'string') {
-                if ( symbol == 'CLO' ){
+                if ( symbol == 'CHO' ){
 		    marker.contentElement = this.long_text_circle(0,0.5*r,1.75*r,symbol,opts);
 		    marker.push(marker.contentElement);
 		}else{
@@ -8024,7 +8024,7 @@ var SVGCanvas = SVGCanvas || (function() {
             text.setAttribute('font-weight','bolder');
             text.setAttribute('fill','#ffffff');
             text.setAttribute('style','font-family: sans-serif; text-anchor: middle;');
-            text.firstChild.setAttribute('dy','1.85ex');
+            text.firstChild.setAttribute('dy','1.6ex');
             text.setAttribute('text-anchor','middle');
 	    marker_group.push(text);
             marker_group.setAttribute('transform','translate('+dim.CX*RS+', 1) scale(1)');
@@ -9063,8 +9063,12 @@ var addElementToLayer = function(layerName) {
             return renderer._visibleTracers();
         };
     }
-    if ( layerName.charAt(0) == 'g' ) {
-	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,'CLO');
+    //if the layername starts with g (glycomod)
+    //   set tracer_marker to CHO
+    //else
+    //   set tracer_marker to first letter of layername
+    if ( layerName.charAt(0)== 'g' ) {
+	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,'CHO');
     }else{ 
 	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,layerName.charAt(0).toUpperCase());
     } 

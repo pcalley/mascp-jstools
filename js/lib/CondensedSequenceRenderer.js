@@ -846,8 +846,12 @@ var addElementToLayer = function(layerName) {
             return renderer._visibleTracers();
         };
     }
-    if ( layerName.charAt(0) == 'g' ) {
-	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,'CLO');
+    //if the layername starts with g (glycomod)
+    //   set tracer_marker to CHO
+    //else
+    //   set tracer_marker to first letter of layername
+    if ( layerName.charAt(0)== 'g' ) {
+	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,'CHO');
     }else{ 
 	var tracer_marker = canvas.marker(this._index+0.3,10,0.5,layerName.charAt(0).toUpperCase());
     } 

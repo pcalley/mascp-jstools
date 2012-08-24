@@ -9,6 +9,8 @@ tools = require('../script_tools.js');
 
 MASCP = require('../dist/js/mascp-jstools.services.js');
 
+
+
 MASCP.events.once('ready',function() {
     MASCP.Service.addListener("requestIncomplete",function() {
         console.log("Request did not complete - waiting");
